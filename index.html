@@ -1,0 +1,1339 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<link rel="icon" type="image/png" href="ico/favicon-96x96.png" sizes="96x96" />
+    <link rel="icon" type="image/svg+xml" href="ico/favicon.svg" />
+    <link rel="shortcut icon" href="ico/favicon.ico" />
+    <link rel="apple-touch-icon" sizes="180x180" href="ico/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-title" content="MiChango" />
+    <link rel="manifest" href="ico/site.webmanifest" />
+<title>Carrito</title>
+<style>
+  :root {
+    --bg: #F8F8F6;
+    --ink: #1A1A1A;
+    --muted: #8A8A8A;
+    --line: #E8E8E4;
+    --green: #2ECC71;
+    --green-dark: #27AE60;
+    --red: #E74C3C;
+    --radius: 16px;
+    --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+  body {
+    font-family: var(--font);
+    background: var(--bg);
+    color: var(--ink);
+    min-height: 100dvh;
+    overflow-x: hidden;
+  }
+
+  /* ── SCREENS ── */
+  .screen { display: none; min-height: 100dvh; flex-direction: column; }
+  .screen.active { display: flex; }
+
+  /* ── HOME ── */
+  #home {
+    align-items: center;
+    justify-content: center;
+    gap: 48px;
+    padding: 40px 32px;
+    text-align: center;
+  }
+
+  .home-icon {
+    width: 88px; height: 88px;
+    background: var(--ink);
+    border-radius: 28px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .home-icon svg { width: 44px; height: 44px; color: var(--bg); }
+
+  .home-text h1 { font-size: 32px; font-weight: 700; letter-spacing: -0.5px; line-height: 1.1; }
+  .home-text p { margin-top: 10px; font-size: 15px; color: var(--muted); line-height: 1.5; }
+
+  .btn-primary {
+    width: 100%; max-width: 320px;
+    padding: 18px;
+    background: var(--ink); color: var(--bg);
+    border: none; border-radius: var(--radius);
+    font-size: 17px; font-weight: 600;
+    cursor: pointer; letter-spacing: -0.2px;
+    transition: opacity 0.15s;
+  }
+  .btn-primary:active { opacity: 0.75; }
+
+  /* ── SIDEBAR ── */
+  #sidebar-overlay {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,0.4); z-index: 400;
+  }
+  #sidebar-overlay.open { display: block; }
+
+  #sidebar {
+    position: fixed; top: 0; left: -280px; bottom: 0;
+    width: 280px; background: var(--bg);
+    z-index: 401; transition: left 0.28s cubic-bezier(.4,0,.2,1);
+    display: flex; flex-direction: column;
+    padding: 56px 0 40px;
+    border-right: 1px solid var(--line);
+  }
+  #sidebar.open { left: 0; }
+
+  .sidebar-brand {
+    padding: 0 24px 32px;
+    border-bottom: 1px solid var(--line);
+  }
+  .sidebar-brand span {
+    font-size: 18px; font-weight: 800; letter-spacing: -0.4px;
+  }
+
+  .sidebar-nav { padding: 16px 0; flex: 1; }
+
+  .sidebar-link {
+    display: flex; align-items: center; gap: 14px;
+    padding: 14px 24px;
+    font-size: 15px; font-weight: 500;
+    color: var(--ink); cursor: pointer;
+    transition: background 0.12s;
+    border: none; background: none; width: 100%; text-align: left;
+  }
+  .sidebar-link:active { background: var(--line); }
+  .sidebar-link svg { width: 20px; height: 20px; color: var(--muted); flex-shrink: 0; }
+  .sidebar-link.active-link { font-weight: 700; }
+  .sidebar-link.active-link svg { color: var(--ink); }
+
+  /* hamburger btn */
+  .hamburger {
+    background: none; border: none;
+    padding: 8px; cursor: pointer;
+    display: flex; flex-direction: column; gap: 5px;
+    border-radius: 10px;
+  }
+  .hamburger span {
+    display: block; width: 22px; height: 2px;
+    background: var(--ink); border-radius: 2px;
+  }
+
+  /* ── SHARED HEADER ── */
+  .page-header {
+    padding: 16px 20px 16px;
+    display: flex; align-items: center; gap: 12px;
+    border-bottom: 1px solid var(--line);
+    background: var(--bg);
+    position: sticky; top: 0; z-index: 10;
+  }
+  .page-header h2 { font-size: 18px; font-weight: 700; letter-spacing: -0.3px; flex: 1; }
+  .page-header .item-count { font-size: 13px; color: var(--muted); font-weight: 500; }
+
+  /* ── SHOP ── */
+  #shop { background: var(--bg); }
+
+  .total-bar {
+    padding: 16px 24px;
+    display: flex; align-items: baseline; gap: 8px;
+  }
+  .total-label { font-size: 13px; color: var(--muted); font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px; }
+  .total-amount { font-size: 36px; font-weight: 800; letter-spacing: -1px; font-variant-numeric: tabular-nums; }
+
+  .product-list { flex: 1; overflow-y: auto; padding: 8px 0 130px; }
+
+  .empty-state { padding: 60px 32px; text-align: center; }
+  .empty-state p { color: var(--muted); font-size: 15px; line-height: 1.6; }
+  .empty-state .arrow { display: block; margin-top: 24px; font-size: 28px; animation: bounce 1.2s ease-in-out infinite; }
+  @keyframes bounce { 0%,100%{transform:translateY(0)} 50%{transform:translateY(6px)} }
+
+  .product-item {
+    display: flex; align-items: center;
+    padding: 14px 20px; gap: 12px;
+    border-bottom: 1px solid var(--line);
+    animation: fadeIn 0.2s ease;
+    cursor: pointer;
+  }
+  .product-item:active { background: var(--line); }
+  @keyframes fadeIn { from{opacity:0;transform:translateY(-6px)} to{opacity:1;transform:none} }
+
+  .product-qty {
+    width: 32px; height: 32px; background: var(--line);
+    border-radius: 10px; display: flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 700; flex-shrink: 0;
+  }
+  .product-info { flex: 1; min-width: 0; }
+  .product-name { font-size: 15px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .product-unit { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .product-price { font-size: 16px; font-weight: 700; font-variant-numeric: tabular-nums; flex-shrink: 0; }
+  .product-delete {
+    width: 28px; height: 28px; background: none; border: none;
+    color: var(--muted); cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 8px; flex-shrink: 0; transition: color 0.15s;
+  }
+  .product-delete:active { color: var(--red); }
+
+  .fab {
+    position: fixed; bottom: 100px; right: 24px;
+    width: 64px; height: 64px; background: var(--ink);
+    border: none; border-radius: 20px;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; box-shadow: 0 8px 24px rgba(0,0,0,0.18);
+    transition: transform 0.15s; z-index: 10;
+  }
+  .fab:active { transform: scale(0.93); }
+  .fab svg { width: 28px; height: 28px; color: white; }
+
+  .shop-footer {
+    position: fixed; bottom: 0; left: 0; right: 0;
+    padding: 16px 24px 32px; background: var(--bg);
+    border-top: 1px solid var(--line);
+  }
+  .btn-finish {
+    width: 100%; padding: 18px;
+    background: var(--green); color: white;
+    border: none; border-radius: var(--radius);
+    font-size: 17px; font-weight: 700; cursor: pointer;
+    transition: background 0.15s;
+  }
+  .btn-finish:active { background: var(--green-dark); }
+  .btn-finish:disabled { background: var(--line); color: var(--muted); cursor: default; }
+
+  /* ── CAMERA ── */
+  #camera-modal {
+    display: none; position: fixed; inset: 0;
+    background: #000; z-index: 100;
+    flex-direction: column; align-items: center; justify-content: center;
+  }
+  #camera-modal.open { display: flex; }
+  #video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+
+  .viewfinder {
+    position: relative; z-index: 1;
+    width: min(72vw, 300px); height: min(72vw, 300px);
+  }
+  .vf-corner { position: absolute; width: 24px; height: 24px; border-color: #fff; border-style: solid; }
+  .vf-corner.tl { top:0;left:0;border-width:3px 0 0 3px;border-radius:4px 0 0 0; }
+  .vf-corner.tr { top:0;right:0;border-width:3px 3px 0 0;border-radius:0 4px 0 0; }
+  .vf-corner.bl { bottom:0;left:0;border-width:0 0 3px 3px;border-radius:0 0 0 4px; }
+  .vf-corner.br { bottom:0;right:0;border-width:0 3px 3px 0;border-radius:0 0 4px 0; }
+  .vf-scan-line {
+    position: absolute; left:0;right:0; height:2px;
+    background: rgba(46,204,113,.8); box-shadow:0 0 8px var(--green);
+    animation: scan 2s ease-in-out infinite; top:0;
+  }
+  @keyframes scan { 0%{top:0%;opacity:1} 50%{top:100%;opacity:1} 51%{opacity:0} 100%{top:0%;opacity:0} }
+
+  .camera-hint { position:relative;z-index:1; margin-top:28px; color:rgba(255,255,255,.7); font-size:14px; text-align:center; padding:0 32px; }
+  .camera-actions { position:relative;z-index:1; display:flex;gap:20px;margin-top:40px;align-items:center; }
+  .btn-shutter {
+    width:72px;height:72px;border-radius:50%;background:white;
+    border:4px solid rgba(255,255,255,.5);cursor:pointer;
+    transition:transform .1s;box-shadow:0 0 0 6px rgba(255,255,255,.15);
+  }
+  .btn-shutter:active { transform:scale(.9); }
+  .btn-cam-cancel {
+    width:48px;height:48px;border-radius:50%;background:rgba(255,255,255,.15);
+    border:none;color:white;font-size:22px;cursor:pointer;
+    display:flex;align-items:center;justify-content:center;
+  }
+  .cam-error { position:relative;z-index:1;color:white;text-align:center;padding:0 32px; }
+  .cam-error h3 { font-size:18px;margin-bottom:8px; }
+  .cam-error p { font-size:14px;color:rgba(255,255,255,.65);line-height:1.5; }
+
+  /* ── QTY / EDIT SCREEN ── */
+  #qty-screen { padding: 56px 24px 40px; gap: 0; background: var(--bg); overflow-y: auto; }
+
+  .qty-back {
+    background:none;border:none;color:var(--muted);font-size:15px;
+    cursor:pointer;display:flex;align-items:center;gap:4px;padding:0;margin-bottom:32px;
+  }
+  .qty-preview { flex:1; display:flex; flex-direction:column; gap:20px; }
+
+  .qty-tag-label {
+    font-size:11px;text-transform:uppercase;letter-spacing:1px;
+    color:var(--muted);font-weight:600;margin-bottom:6px;
+  }
+
+  /* editable field */
+  .edit-field {
+    width:100%;padding:12px 14px;
+    background:var(--line);border:2px solid transparent;
+    border-radius:12px;font-size:16px;font-family:var(--font);
+    font-weight:600;color:var(--ink);outline:none;
+    transition:border-color .15s;
+  }
+  .edit-field:focus { border-color:var(--ink); background: white; }
+
+  .qty-divider { width:100%;height:1px;background:var(--line); }
+
+  .qty-selector {
+    display:flex;align-items:center;justify-content:space-between;
+    background:var(--line);border-radius:var(--radius);padding:8px;gap:12px;
+  }
+  .qty-btn {
+    width:48px;height:48px;background:white;border:none;border-radius:12px;
+    font-size:22px;font-weight:300;cursor:pointer;
+    display:flex;align-items:center;justify-content:center;
+    box-shadow:0 1px 4px rgba(0,0,0,.08);transition:transform .1s;
+  }
+  .qty-btn:active { transform:scale(.92); }
+  .qty-number {
+    font-size:32px;font-weight:800;font-variant-numeric:tabular-nums;
+    letter-spacing:-1px;flex:1;text-align:center;
+  }
+  .qty-subtotal {
+    background:var(--ink);color:var(--bg);border-radius:var(--radius);
+    padding:20px 24px;display:flex;align-items:baseline;justify-content:space-between;
+  }
+  .qty-subtotal-label { font-size:13px;font-weight:500;opacity:.5;text-transform:uppercase;letter-spacing:.5px; }
+  .qty-subtotal-amount { font-size:28px;font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:-.5px; }
+
+  .qty-add-btn {
+    width:100%;padding:18px;background:var(--green);color:white;
+    border:none;border-radius:var(--radius);font-size:17px;font-weight:700;
+    cursor:pointer;margin-top:16px;transition:background .15s;
+  }
+  .qty-add-btn:active { background:var(--green-dark); }
+
+  /* ── PROCESSING ── */
+  #processing {
+    display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);
+    z-index:200;flex-direction:column;align-items:center;justify-content:center;gap:20px;
+  }
+  #processing.open { display:flex; }
+  .spinner {
+    width:40px;height:40px;border:3px solid rgba(255,255,255,.15);
+    border-top-color:white;border-radius:50%;animation:spin .7s linear infinite;
+  }
+  @keyframes spin { to{transform:rotate(360deg)} }
+  #processing p { color:rgba(255,255,255,.8);font-size:14px; }
+
+  /* ── SUMMARY ── */
+  #summary { padding: 0; gap: 0; overflow-y: auto; }
+  .summary-body { padding: 20px 24px 100px; display: flex; flex-direction: column; gap: 20px; }
+
+  .summary-total-box {
+    background:var(--ink);color:var(--bg);border-radius:var(--radius);padding:24px;
+  }
+  .summary-total-box .total-label { color:rgba(255,255,255,.5); }
+  .summary-total-box .total-amount { font-size:48px; }
+
+  .summary-items {
+    display:flex;flex-direction:column;gap:1px;
+    background:var(--line);border-radius:var(--radius);overflow:hidden;
+  }
+  .summary-item {
+    background:var(--bg);padding:14px 18px;
+    display:flex;justify-content:space-between;align-items:center;gap:12px;
+  }
+  .summary-item-info { flex:1;min-width:0; }
+  .summary-item-name { font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
+  .summary-item-detail { font-size:12px;color:var(--muted);margin-top:2px; }
+  .summary-item-total { font-size:15px;font-weight:700;font-variant-numeric:tabular-nums;flex-shrink:0; }
+
+  .summary-footer {
+    position: fixed; bottom:0;left:0;right:0;
+    padding:16px 24px 32px;background:var(--bg);border-top:1px solid var(--line);
+  }
+  .btn-new {
+    width:100%;padding:18px;background:none;color:var(--ink);
+    border:2px solid var(--ink);border-radius:var(--radius);
+    font-size:17px;font-weight:600;cursor:pointer;
+    transition:background .15s,color .15s;
+  }
+  .btn-new:active { background:var(--ink);color:var(--bg); }
+
+  /* ── HISTORY ── */
+  #history { overflow-y: auto; }
+  .history-body { padding: 8px 0 40px; flex: 1; }
+
+  .history-item {
+    padding: 16px 24px; border-bottom: 1px solid var(--line);
+    cursor: pointer; transition: background .12s;
+    display: flex; align-items: center; gap: 14px;
+  }
+  .history-item:active { background: var(--line); }
+  .history-item-icon {
+    width: 40px; height: 40px; background: var(--line);
+    border-radius: 12px; display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .history-item-icon svg { width: 18px; height: 18px; color: var(--muted); }
+  .history-item-info { flex: 1; min-width: 0; }
+  .history-item-date { font-size: 13px; color: var(--muted); }
+  .history-item-count { font-size: 12px; color: var(--muted); margin-top: 1px; }
+  .history-item-total { font-size: 17px; font-weight: 700; font-variant-numeric: tabular-nums; flex-shrink: 0; }
+
+  .history-empty { padding: 60px 32px; text-align: center; }
+  .history-empty p { color: var(--muted); font-size: 15px; line-height: 1.6; }
+
+  /* history detail sheet */
+  #history-detail {
+    display: none; position: fixed; inset: 0;
+    background: var(--bg); z-index: 50;
+    flex-direction: column; overflow-y: auto;
+  }
+  #history-detail.open { display: flex; }
+  .hd-body { padding: 20px 24px 60px; display: flex; flex-direction: column; gap: 20px; }
+
+  /* ── SETTINGS ── */
+  #settings { overflow-y: auto; }
+  .settings-body { padding: 20px 24px 60px; display: flex; flex-direction: column; gap: 28px; }
+
+  .settings-section-title {
+    font-size: 11px; text-transform: uppercase; letter-spacing: 1px;
+    color: var(--muted); font-weight: 600; margin-bottom: 10px;
+  }
+  .settings-group {
+    background: white; border-radius: var(--radius);
+    border: 1px solid var(--line); overflow: hidden;
+  }
+  .settings-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 18px; border-bottom: 1px solid var(--line); gap: 12px;
+  }
+  .settings-row:last-child { border-bottom: none; }
+  .settings-row-label { font-size: 15px; font-weight: 500; }
+  .settings-row-sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+  .settings-select {
+    background: var(--line); border: none; border-radius: 8px;
+    padding: 8px 10px; font-size: 14px; font-family: var(--font);
+    font-weight: 600; color: var(--ink); outline: none; cursor: pointer;
+    min-width: 80px; text-align: right;
+  }
+
+  /* ── TOAST ── */
+  #toast {
+    position:fixed;bottom:120px;left:50%;
+    transform:translateX(-50%) translateY(20px);
+    background:var(--ink);color:white;
+    padding:10px 18px;border-radius:100px;
+    font-size:13px;font-weight:500;white-space:nowrap;
+    opacity:0;transition:opacity .2s,transform .2s;
+    pointer-events:none;z-index:999;
+  }
+  #toast.show { opacity:1;transform:translateX(-50%) translateY(0); }
+
+  /* ── BOTTOM SHEET (edit modal) ── */
+  #edit-overlay {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,.5); z-index: 500;
+    align-items: flex-end; justify-content: center;
+  }
+  #edit-overlay.open { display: flex; }
+  .edit-sheet {
+    background: var(--bg); border-radius: 24px 24px 0 0;
+    padding: 28px 24px 48px; width: 100%; max-width: 500px;
+    display: flex; flex-direction: column; gap: 16px;
+  }
+  .edit-sheet-title {
+    font-size: 16px; font-weight: 700; letter-spacing: -0.3px;
+    padding-bottom: 4px; border-bottom: 1px solid var(--line);
+  }
+  .edit-sheet-field { display: flex; flex-direction: column; gap: 6px; }
+  .edit-sheet-label { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); font-weight: 600; }
+  .edit-sheet-actions { display: flex; gap: 10px; margin-top: 4px; }
+  .edit-btn-cancel {
+    flex: 1; padding: 15px; border: 2px solid var(--line);
+    background: none; border-radius: var(--radius);
+    font-size: 15px; font-weight: 600; cursor: pointer;
+  }
+  .edit-btn-save {
+    flex: 2; padding: 15px; background: var(--ink); color: white;
+    border: none; border-radius: var(--radius);
+    font-size: 15px; font-weight: 700; cursor: pointer;
+  }
+
+  /* sidebar account card */
+  .sidebar-account {
+    padding: 20px 24px;
+    border-bottom: 1px solid var(--line);
+    display: flex; align-items: center; gap: 12px;
+    cursor: pointer; transition: background .12s; border: none; width: 100%; text-align: left; background: none;
+  }
+  .sidebar-account:active { background: var(--line); }
+  .sidebar-avatar {
+    width: 44px; height: 44px; border-radius: 50%;
+    background: var(--line); flex-shrink: 0;
+    overflow: hidden; display: flex; align-items: center; justify-content: center;
+    font-size: 18px; font-weight: 700; color: var(--muted);
+  }
+  .sidebar-avatar img { width: 100%; height: 100%; object-fit: cover; }
+  .sidebar-account-info { min-width: 0; }
+  .sidebar-account-name { font-size: 14px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .sidebar-account-email { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  /* ── ACCOUNT SCREEN ── */
+  #account { overflow-y: auto; }
+  .account-body { padding: 28px 24px 60px; display: flex; flex-direction: column; gap: 28px; }
+
+  .account-hero {
+    display: flex; flex-direction: column; align-items: center;
+    gap: 14px; padding: 8px 0 4px;
+  }
+  .account-avatar-wrap { position: relative; display: inline-block; }
+  .account-avatar {
+    width: 96px; height: 96px; border-radius: 50%;
+    background: var(--line); overflow: hidden;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 36px; font-weight: 700; color: var(--muted);
+  }
+  .account-avatar img { width: 100%; height: 100%; object-fit: cover; }
+  .account-avatar-btn {
+    position: absolute; bottom: 2px; right: 2px;
+    width: 28px; height: 28px; border-radius: 50%;
+    background: var(--ink); border: 2px solid var(--bg);
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+  }
+  .account-avatar-btn svg { width: 13px; height: 13px; color: white; }
+  #avatar-input { display: none; }
+
+  #capture-canvas { display:none; }
+</style>
+</head>
+<body>
+
+<!-- ══ SIDEBAR ══ -->
+<div id="sidebar-overlay" onclick="closeSidebar()"></div>
+<div id="sidebar">
+  <!-- account card -->
+  <button class="sidebar-account" onclick="navTo('account')">
+    <div class="sidebar-avatar" id="sidebar-avatar-el">?</div>
+    <div class="sidebar-account-info">
+      <div class="sidebar-account-name" id="sidebar-name">Mi Cuenta</div>
+      <div class="sidebar-account-email" id="sidebar-email">Tocá para editar</div>
+    </div>
+  </button>
+  <nav class="sidebar-nav">
+    <button class="sidebar-link" onclick="navTo('home')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+      Inicio
+    </button>
+    <button class="sidebar-link" onclick="navTo('history')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      Historial
+    </button>
+    <button class="sidebar-link" onclick="navTo('settings')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+      Configuración
+    </button>
+    <button class="sidebar-link" onclick="navTo('account')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+      Mi Cuenta
+    </button>
+  </nav>
+</div>
+
+<!-- ══ SCREEN: HOME ══ -->
+<div id="home" class="screen active">
+  <button class="hamburger" onclick="openSidebar()" style="position:absolute;top:16px;left:16px;z-index:5;">
+    <span></span><span></span><span></span>
+  </button>
+  <div class="home-icon">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/>
+      <line x1="3" y1="6" x2="21" y2="6"/>
+      <path d="M16 10a4 4 0 01-8 0"/>
+    </svg>
+  </div>
+  <div class="home-text">
+    <h1>Tu carrito,<br>en tiempo real.</h1>
+    <p>Fotografiá la etiqueta de precio y sumá productos al instante.</p>
+  </div>
+  <button class="btn-primary" onclick="startShopping()">Iniciar compra</button>
+</div>
+
+<!-- ══ SCREEN: SHOP ══ -->
+<div id="shop" class="screen">
+  <div class="page-header">
+    <button class="hamburger" onclick="openSidebar()">
+      <span></span><span></span><span></span>
+    </button>
+    <h2>Compra</h2>
+    <span class="item-count" id="item-count">0 productos</span>
+  </div>
+
+  <div class="total-bar">
+    <span class="total-label">Total</span>
+    <span class="total-amount" id="total-display">$0</span>
+  </div>
+
+  <div class="product-list" id="product-list">
+    <div class="empty-state">
+      <p>Apuntá la cámara a la<br>etiqueta de precio de un producto.</p>
+      <span class="arrow">↓</span>
+    </div>
+  </div>
+
+  <button class="fab" onclick="openCamera()">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/>
+      <circle cx="12" cy="13" r="4"/>
+    </svg>
+  </button>
+
+  <div class="shop-footer">
+    <button class="btn-finish" id="finish-btn" onclick="showSummary()" disabled>Finalizar compra</button>
+  </div>
+</div>
+
+<!-- ══ SCREEN: QTY / CONFIRM ══ -->
+<div id="qty-screen" class="screen">
+  <button class="qty-back" onclick="goBack()">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
+    Volver
+  </button>
+
+  <div class="qty-preview">
+    <div>
+      <p class="qty-tag-label">Nombre del producto</p>
+      <input class="edit-field" id="qty-product-name" type="text" placeholder="Nombre del producto">
+      <p class="qty-tag-label" style="margin-top:16px">Precio unitario</p>
+      <input class="edit-field" id="qty-unit-price-input" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00">
+    </div>
+
+    <div class="qty-divider"></div>
+
+    <div>
+      <p class="qty-tag-label">Cantidad</p>
+      <div class="qty-selector">
+        <button class="qty-btn" onclick="changeQty(-1)">−</button>
+        <span class="qty-number" id="qty-number">1</span>
+        <button class="qty-btn" onclick="changeQty(1)">+</button>
+      </div>
+    </div>
+
+    <div class="qty-subtotal">
+      <span class="qty-subtotal-label">Subtotal</span>
+      <span class="qty-subtotal-amount" id="qty-subtotal">$0</span>
+    </div>
+  </div>
+
+  <button class="qty-add-btn" id="qty-add-btn" onclick="addToCart()">Agregar al carrito</button>
+</div>
+
+<!-- ══ SCREEN: SUMMARY ══ -->
+<div id="summary" class="screen">
+  <div class="page-header">
+    <button class="hamburger" onclick="openSidebar()">
+      <span></span><span></span><span></span>
+    </button>
+    <h2>Resumen</h2>
+  </div>
+  <div class="summary-body">
+    <p id="summary-date" style="font-size:13px;color:var(--muted)"></p>
+    <div class="summary-total-box">
+      <p class="total-label">Total</p>
+      <p class="total-amount" id="summary-total">$0</p>
+    </div>
+    <div class="summary-items" id="summary-items"></div>
+  </div>
+  <div class="summary-footer">
+    <button class="btn-new" onclick="newShopping()">Nueva compra</button>
+  </div>
+</div>
+
+<!-- ══ SCREEN: HISTORY ══ -->
+<div id="history" class="screen">
+  <div class="page-header">
+    <button class="hamburger" onclick="openSidebar()">
+      <span></span><span></span><span></span>
+    </button>
+    <h2>Historial</h2>
+  </div>
+  <div class="history-body" id="history-body"></div>
+</div>
+
+<!-- ══ HISTORY DETAIL ══ -->
+<div id="history-detail">
+  <div class="page-header">
+    <button class="hamburger" style="visibility:hidden"><span></span><span></span><span></span></button>
+    <h2>Detalle</h2>
+    <button onclick="closeHistoryDetail()" style="background:none;border:none;font-size:15px;color:var(--muted);cursor:pointer;font-weight:500;">Cerrar</button>
+  </div>
+  <div class="hd-body">
+    <p id="hd-date" style="font-size:13px;color:var(--muted)"></p>
+    <div class="summary-total-box">
+      <p class="total-label">Total</p>
+      <p class="total-amount" id="hd-total">$0</p>
+    </div>
+    <div class="summary-items" id="hd-items"></div>
+  </div>
+</div>
+
+<!-- ══ SCREEN: SETTINGS ══ -->
+<div id="settings" class="screen">
+  <div class="page-header">
+    <button class="hamburger" onclick="openSidebar()">
+      <span></span><span></span><span></span>
+    </button>
+    <h2>Configuración</h2>
+  </div>
+  <div class="settings-body">
+    <div>
+      <p class="settings-section-title">Región y moneda</p>
+      <div class="settings-group">
+        <div class="settings-row">
+          <div>
+            <div class="settings-row-label">País</div>
+            <div class="settings-row-sub" id="currency-preview"></div>
+          </div>
+          <select class="settings-select" id="country-select" onchange="onCountryChange()">
+            <option value="AR">🇦🇷 Argentina</option>
+            <option value="MX">🇲🇽 México</option>
+            <option value="CO">🇨🇴 Colombia</option>
+            <option value="CL">🇨🇱 Chile</option>
+            <option value="PE">🇵🇪 Perú</option>
+            <option value="UY">🇺🇾 Uruguay</option>
+            <option value="PY">🇵🇾 Paraguay</option>
+            <option value="BO">🇧🇴 Bolivia</option>
+            <option value="VE">🇻🇪 Venezuela</option>
+            <option value="EC">🇪🇨 Ecuador</option>
+            <option value="US">🇺🇸 Estados Unidos</option>
+            <option value="ES">🇪🇸 España</option>
+            <option value="BR">🇧🇷 Brasil</option>
+          </select>
+        </div>
+        <div class="settings-row">
+          <div><div class="settings-row-label">Separador decimal</div></div>
+          <select class="settings-select" id="decimal-select" onchange="onDecimalChange()">
+            <option value="comma">Coma (1.234,56)</option>
+            <option value="dot">Punto (1,234.56)</option>
+          </select>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ SCREEN: ACCOUNT ══ -->
+<div id="account" class="screen">
+  <div class="page-header">
+    <button class="hamburger" onclick="openSidebar()">
+      <span></span><span></span><span></span>
+    </button>
+    <h2>Mi Cuenta</h2>
+  </div>
+  <div class="account-body">
+    <!-- avatar -->
+    <div class="account-hero">
+      <div class="account-avatar-wrap">
+        <div class="account-avatar" id="account-avatar-el">?</div>
+        <label class="account-avatar-btn" for="avatar-input" title="Cambiar foto">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/>
+            <circle cx="12" cy="13" r="4"/>
+          </svg>
+        </label>
+        <input type="file" id="avatar-input" accept="image/*" onchange="onAvatarChange(event)">
+      </div>
+    </div>
+
+    <!-- form fields -->
+    <div>
+      <p class="settings-section-title">Información personal</p>
+      <div class="settings-group">
+        <div class="settings-row" style="flex-direction:column;align-items:flex-start;gap:6px;">
+          <label class="edit-sheet-label">Nombre</label>
+          <input class="edit-field" id="account-firstname" type="text" placeholder="Tu nombre" oninput="onAccountInput()">
+        </div>
+        <div class="settings-row" style="flex-direction:column;align-items:flex-start;gap:6px;">
+          <label class="edit-sheet-label">Apellido</label>
+          <input class="edit-field" id="account-lastname" type="text" placeholder="Tu apellido" oninput="onAccountInput()">
+        </div>
+        <div class="settings-row" style="flex-direction:column;align-items:flex-start;gap:6px;">
+          <label class="edit-sheet-label">Email</label>
+          <input class="edit-field" id="account-email" type="email" inputmode="email" placeholder="tu@email.com" oninput="onAccountInput()">
+        </div>
+      </div>
+    </div>
+
+    <button class="qty-add-btn" id="account-save-btn" onclick="saveAccount()">Guardar cambios</button>
+  </div>
+</div>
+
+<!-- ══ CAMERA MODAL ══ -->
+<div id="camera-modal">
+  <video id="video" autoplay playsinline muted></video>
+  <canvas id="capture-canvas"></canvas>
+  <div class="viewfinder">
+    <div class="vf-corner tl"></div><div class="vf-corner tr"></div>
+    <div class="vf-corner bl"></div><div class="vf-corner br"></div>
+    <div class="vf-scan-line"></div>
+  </div>
+  <p class="camera-hint">Ubicá la etiqueta dentro del recuadro</p>
+  <div class="camera-actions">
+    <button class="btn-cam-cancel" onclick="closeCamera()">✕</button>
+    <button class="btn-shutter" id="shutter-btn" onclick="capturePhoto()"></button>
+    <div style="width:48px"></div>
+  </div>
+</div>
+
+<!-- ══ PROCESSING ══ -->
+<div id="processing">
+  <div class="spinner"></div>
+  <p>Leyendo etiqueta…</p>
+</div>
+
+<!-- ══ EDIT BOTTOM SHEET ══ -->
+<div id="edit-overlay">
+  <div class="edit-sheet">
+    <div class="edit-sheet-title">Editar producto</div>
+    <div class="edit-sheet-field">
+      <label class="edit-sheet-label">Nombre</label>
+      <input class="edit-field" id="edit-name" type="text">
+    </div>
+    <div class="edit-sheet-field">
+      <label class="edit-sheet-label">Precio unitario</label>
+      <input class="edit-field" id="edit-price" type="number" inputmode="decimal" min="0" step="0.01">
+    </div>
+    <div class="edit-sheet-field">
+      <label class="edit-sheet-label">Cantidad</label>
+      <input class="edit-field" id="edit-qty" type="number" inputmode="numeric" min="1" step="1">
+    </div>
+    <div class="edit-sheet-actions">
+      <button class="edit-btn-cancel" onclick="closeEditSheet()">Cancelar</button>
+      <button class="edit-btn-save" onclick="saveEditedItem()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ TOAST ══ -->
+<div id="toast"></div>
+
+<script>
+
+// ── LOCALE PRESETS ──
+// { locale, currency, symbol, decimals }
+const COUNTRY_LOCALES = {
+  AR: { locale: 'es-AR', currency: 'ARS', symbol: '$',   decimals: 2 },
+  MX: { locale: 'es-MX', currency: 'MXN', symbol: '$',   decimals: 2 },
+  CO: { locale: 'es-CO', currency: 'COP', symbol: '$',   decimals: 0 },
+  CL: { locale: 'es-CL', currency: 'CLP', symbol: '$',   decimals: 0 },
+  PE: { locale: 'es-PE', currency: 'PEN', symbol: 'S/',  decimals: 2 },
+  UY: { locale: 'es-UY', currency: 'UYU', symbol: '$',   decimals: 2 },
+  PY: { locale: 'es-PY', currency: 'PYG', symbol: '₲',  decimals: 0 },
+  BO: { locale: 'es-BO', currency: 'BOB', symbol: 'Bs.', decimals: 2 },
+  VE: { locale: 'es-VE', currency: 'VES', symbol: 'Bs.', decimals: 2 },
+  EC: { locale: 'es-EC', currency: 'USD', symbol: '$',   decimals: 2 },
+  US: { locale: 'en-US', currency: 'USD', symbol: '$',   decimals: 2 },
+  ES: { locale: 'es-ES', currency: 'EUR', symbol: '€',   decimals: 2 },
+  BR: { locale: 'pt-BR', currency: 'BRL', symbol: 'R$',  decimals: 2 },
+};
+
+// ── STORAGE SCHEMA ──
+// {
+//   version: 2,
+//   settings: { country: string, decimal_sep: 'comma'|'dot' },
+//   sessions: [{ id, created_at, finished_at, items:[{id,name,unit_price,quantity,subtotal,added_at}], total }]
+// }
+const DB_KEY = 'carrito_v1';
+
+function loadDB() {
+  try {
+    const d = JSON.parse(localStorage.getItem(DB_KEY));
+    return d || { version: 2, settings: { country: 'AR', decimal_sep: 'comma' }, sessions: [] };
+  } catch {
+    return { version: 2, settings: { country: 'AR', decimal_sep: 'comma' }, sessions: [] };
+  }
+}
+function saveDB() { localStorage.setItem(DB_KEY, JSON.stringify(db)); }
+function uuid() { return crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36)+Math.random().toString(36).slice(2); }
+
+// ── STATE ──
+let db = loadDB();
+let currentSession = null;
+let currentProduct = null;  // product being confirmed/edited from scan
+let currentQty = 1;
+let editingItemId = null;   // item id being edited in cart
+let editingMode = 'add';    // 'add' | 'edit-cart'
+let videoStream = null;
+
+// ── LOCALE HELPERS ──
+function getLocale() {
+  const country = db.settings?.country || 'AR';
+  return COUNTRY_LOCALES[country] || COUNTRY_LOCALES['AR'];
+}
+
+function parsePrice(str) {
+  // Normalize based on decimal_sep setting
+  const sep = db.settings?.decimal_sep || 'comma';
+  let s = String(str).trim();
+  if (sep === 'comma') {
+    // Format: 1.234,56 → remove dots, replace comma
+    s = s.replace(/\./g, '').replace(',', '.');
+  } else {
+    // Format: 1,234.56 → remove commas
+    s = s.replace(/,/g, '');
+  }
+  const n = parseFloat(s);
+  return isNaN(n) ? null : n;
+}
+
+function formatPrice(n) {
+  if (n == null || isNaN(n)) return getLocale().symbol + '0';
+  const loc = getLocale();
+  const sep = db.settings?.decimal_sep || 'comma';
+
+  // Use Intl with the locale to get correct grouping/decimal
+  const formatted = Number(n).toLocaleString(loc.locale, {
+    minimumFractionDigits: loc.decimals,
+    maximumFractionDigits: loc.decimals
+  });
+
+  // Some environments may not respect locale decimal style, so we normalize
+  // by detecting what Intl produced and swapping if mismatched
+  return loc.symbol + formatted;
+}
+
+function formatDate(iso) {
+  const loc = getLocale();
+  return new Date(iso).toLocaleString(loc.locale, { dateStyle: 'medium', timeStyle: 'short' });
+}
+
+// ── SIDEBAR ──
+function openSidebar() {
+  document.getElementById('sidebar').classList.add('open');
+  document.getElementById('sidebar-overlay').classList.add('open');
+}
+function closeSidebar() {
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('sidebar-overlay').classList.remove('open');
+}
+function navTo(screen) {
+  closeSidebar();
+  if (screen === 'history') renderHistory();
+  if (screen === 'settings') renderSettings();
+  showScreen(screen);
+}
+
+// ── NAVIGATION ──
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+function goBack() { showScreen('shop'); }
+
+// ── HOME ──
+function startShopping() {
+  newSession();
+  showScreen('shop');
+}
+
+function newSession() {
+  currentSession = {
+    id: uuid(),
+    created_at: new Date().toISOString(),
+    finished_at: null,
+    items: [],
+    total: 0
+  };
+  renderShop();
+}
+
+// ── CAMERA ──
+async function openCamera() {
+  const modal = document.getElementById('camera-modal');
+  modal.classList.add('open');
+  const prevErr = modal.querySelector('.cam-error');
+  if (prevErr) prevErr.remove();
+  try {
+    videoStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
+    });
+    document.getElementById('video').srcObject = videoStream;
+  } catch {
+    document.getElementById('shutter-btn').disabled = true;
+    modal.querySelector('.camera-hint').style.display = 'none';
+    const err = document.createElement('div');
+    err.className = 'cam-error';
+    err.innerHTML = '<h3>Sin acceso a la cámara</h3><p>Habilitá los permisos de cámara en la configuración del navegador.</p>';
+    modal.querySelector('.camera-actions').before(err);
+  }
+}
+
+function closeCamera() {
+  if (videoStream) { videoStream.getTracks().forEach(t => t.stop()); videoStream = null; }
+  document.getElementById('video').srcObject = null;
+  document.getElementById('camera-modal').classList.remove('open');
+  document.getElementById('shutter-btn').disabled = false;
+}
+
+function capturePhoto() {
+  const video = document.getElementById('video');
+  const canvas = document.getElementById('capture-canvas');
+  const vfSize = Math.min(window.innerWidth * 0.72, 300);
+  const vw = window.innerWidth, vh = window.innerHeight;
+  const cx = (vw - vfSize) / 2, cy = (vh - vfSize) / 2;
+  const sx = cx * (video.videoWidth / vw);
+  const sy = cy * (video.videoHeight / vh);
+  const sw = vfSize * (video.videoWidth / vw);
+  const sh = vfSize * (video.videoHeight / vh);
+  const size = Math.min(sw, sh);
+  canvas.width = size; canvas.height = size;
+  canvas.getContext('2d').drawImage(video, sx, sy, size, size, 0, 0, size, size);
+  const base64 = canvas.toDataURL('image/jpeg', 0.85).split(',')[1];
+  closeCamera();
+  analyzeImage(base64);
+}
+
+// ── GROQ AI (Frontend modificado para Cloudflare Pages) ──
+async function analyzeImage(base64) {
+  document.getElementById('processing').classList.add('open');
+  const loc = getLocale();
+
+  try {
+    // Apuntamos a nuestra Cloudflare Function pasando la imagen y la configuración regional
+    const res = await fetch('/api/extract', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        base64: base64,
+        loc: loc
+      })
+    });
+
+    if (!res.ok) throw new Error(`Server error ${res.status}`);
+    
+    // La función ya nos devuelve el objeto JSON limpio e identificado
+    const parsed = await res.json();
+    
+    document.getElementById('processing').classList.remove('open');
+    openQtyScreen(parsed);
+
+  } catch (e) {
+    document.getElementById('processing').classList.remove('open');
+    toast('No se pudo leer la etiqueta');
+    console.error(e);
+  }
+}
+
+
+// ── QTY SCREEN (confirm + editable fields) ──
+function openQtyScreen(product) {
+  currentProduct = product;
+  currentQty = 1;
+  editingMode = 'add';
+
+  document.getElementById('qty-product-name').value = product.name || '';
+  document.getElementById('qty-unit-price-input').value = product.unit_price != null ? product.unit_price : '';
+  document.getElementById('qty-add-btn').textContent = 'Agregar al carrito';
+  updateQtyDisplay();
+  showScreen('qty-screen');
+}
+
+function changeQty(delta) {
+  currentQty = Math.max(1, currentQty + delta);
+  updateQtyDisplay();
+}
+
+function updateQtyDisplay() {
+  document.getElementById('qty-number').textContent = currentQty;
+  const price = parseFloat(document.getElementById('qty-unit-price-input').value) || 0;
+  document.getElementById('qty-subtotal').textContent = formatPrice(price * currentQty);
+}
+
+// Live update subtotal when price field changes
+document.getElementById('qty-unit-price-input').addEventListener('input', updateQtyDisplay);
+
+function addToCart() {
+  const name = document.getElementById('qty-product-name').value.trim() || 'Producto';
+  const unit_price = parseFloat(document.getElementById('qty-unit-price-input').value);
+
+  if (!unit_price || unit_price <= 0) { toast('Ingresá un precio válido'); return; }
+  if (!currentSession) return;
+
+  const item = {
+    id: uuid(),
+    name,
+    unit_price,
+    quantity: currentQty,
+    subtotal: parseFloat((unit_price * currentQty).toFixed(2)),
+    added_at: new Date().toISOString()
+  };
+
+  currentSession.items.push(item);
+  currentSession.total = parseFloat(currentSession.items.reduce((s, i) => s + i.subtotal, 0).toFixed(2));
+  renderShop();
+  showScreen('shop');
+  toast(`${name} agregado ✓`);
+}
+
+// ── SHOP ──
+function renderShop() {
+  const list = document.getElementById('product-list');
+  const count = currentSession?.items?.length || 0;
+  const total = currentSession?.total || 0;
+
+  document.getElementById('item-count').textContent = `${count} producto${count !== 1 ? 's' : ''}`;
+  document.getElementById('total-display').textContent = formatPrice(total);
+  document.getElementById('finish-btn').disabled = count === 0;
+
+  if (count === 0) {
+    list.innerHTML = `<div class="empty-state"><p>Apuntá la cámara a la<br>etiqueta de precio de un producto.</p><span class="arrow">↓</span></div>`;
+    return;
+  }
+
+  list.innerHTML = currentSession.items.map(item => `
+    <div class="product-item" onclick="openEditSheet('${item.id}')">
+      <div class="product-qty">${item.quantity}×</div>
+      <div class="product-info">
+        <div class="product-name">${esc(item.name)}</div>
+        <div class="product-unit">${formatPrice(item.unit_price)} c/u</div>
+      </div>
+      <div class="product-price">${formatPrice(item.subtotal)}</div>
+      <button class="product-delete" onclick="event.stopPropagation();removeItem('${item.id}')">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/>
+          <path d="M10 11v6M14 11v6M9 6V4h6v2"/>
+        </svg>
+      </button>
+    </div>
+  `).join('');
+}
+
+function removeItem(id) {
+  if (!currentSession) return;
+  currentSession.items = currentSession.items.filter(i => i.id !== id);
+  currentSession.total = parseFloat(currentSession.items.reduce((s, i) => s + i.subtotal, 0).toFixed(2));
+  renderShop();
+}
+
+// ── EDIT CART ITEM (bottom sheet) ──
+function openEditSheet(id) {
+  const item = currentSession?.items.find(i => i.id === id);
+  if (!item) return;
+  editingItemId = id;
+  document.getElementById('edit-name').value = item.name;
+  document.getElementById('edit-price').value = item.unit_price;
+  document.getElementById('edit-qty').value = item.quantity;
+  document.getElementById('edit-overlay').classList.add('open');
+}
+
+function closeEditSheet() {
+  document.getElementById('edit-overlay').classList.remove('open');
+  editingItemId = null;
+}
+
+function saveEditedItem() {
+  if (!editingItemId || !currentSession) return;
+  const name = document.getElementById('edit-name').value.trim() || 'Producto';
+  const unit_price = parseFloat(document.getElementById('edit-price').value);
+  const quantity = parseInt(document.getElementById('edit-qty').value) || 1;
+  if (!unit_price || unit_price <= 0) { toast('Precio inválido'); return; }
+
+  const item = currentSession.items.find(i => i.id === editingItemId);
+  if (item) {
+    item.name = name;
+    item.unit_price = unit_price;
+    item.quantity = Math.max(1, quantity);
+    item.subtotal = parseFloat((unit_price * item.quantity).toFixed(2));
+  }
+  currentSession.total = parseFloat(currentSession.items.reduce((s, i) => s + i.subtotal, 0).toFixed(2));
+  renderShop();
+  closeEditSheet();
+  toast('Producto actualizado ✓');
+}
+
+// ── SUMMARY ──
+function showSummary() {
+  if (!currentSession || currentSession.items.length === 0) return;
+  currentSession.finished_at = new Date().toISOString();
+  db.sessions.push({ ...currentSession, items: [...currentSession.items] });
+  saveDB();
+
+  document.getElementById('summary-total').textContent = formatPrice(currentSession.total);
+  document.getElementById('summary-date').textContent = formatDate(currentSession.finished_at);
+  document.getElementById('summary-items').innerHTML = renderItemList(currentSession.items);
+  showScreen('summary');
+}
+
+function newShopping() {
+  currentSession = null;
+  showScreen('home');
+}
+
+function renderItemList(items) {
+  return items.map(item => `
+    <div class="summary-item">
+      <div class="summary-item-info">
+        <div class="summary-item-name">${esc(item.name)}</div>
+        <div class="summary-item-detail">${item.quantity} × ${formatPrice(item.unit_price)}</div>
+      </div>
+      <div class="summary-item-total">${formatPrice(item.subtotal)}</div>
+    </div>
+  `).join('');
+}
+
+// ── HISTORY ──
+function renderHistory() {
+  const body = document.getElementById('history-body');
+  const sessions = [...(db.sessions || [])].reverse();
+
+  if (sessions.length === 0) {
+    body.innerHTML = '<div class="history-empty"><p>Todavía no tenés<br>compras finalizadas.</p></div>';
+    return;
+  }
+
+  body.innerHTML = sessions.map(s => `
+    <div class="history-item" onclick="openHistoryDetail('${s.id}')">
+      <div class="history-item-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/>
+          <line x1="3" y1="6" x2="21" y2="6"/>
+          <path d="M16 10a4 4 0 01-8 0"/>
+        </svg>
+      </div>
+      <div class="history-item-info">
+        <div class="product-name">${formatDate(s.finished_at || s.created_at)}</div>
+        <div class="history-item-count">${s.items.length} producto${s.items.length !== 1 ? 's' : ''}</div>
+      </div>
+      <div class="history-item-total">${formatPrice(s.total)}</div>
+    </div>
+  `).join('');
+}
+
+function openHistoryDetail(id) {
+  const s = db.sessions.find(s => s.id === id);
+  if (!s) return;
+  document.getElementById('hd-date').textContent = formatDate(s.finished_at || s.created_at);
+  document.getElementById('hd-total').textContent = formatPrice(s.total);
+  document.getElementById('hd-items').innerHTML = renderItemList(s.items);
+  document.getElementById('history-detail').classList.add('open');
+}
+
+function closeHistoryDetail() {
+  document.getElementById('history-detail').classList.remove('open');
+}
+
+// ── SETTINGS ──
+function renderSettings() {
+  const s = db.settings || {};
+  document.getElementById('country-select').value = s.country || 'AR';
+  document.getElementById('decimal-select').value = s.decimal_sep || 'comma';
+  updateCurrencyPreview();
+}
+
+function onCountryChange() {
+  db.settings.country = document.getElementById('country-select').value;
+  // Auto-set decimal sep based on locale convention
+  const loc = COUNTRY_LOCALES[db.settings.country];
+  if (loc) {
+    // US/BR use dot; most of Latin America + ES use comma
+    db.settings.decimal_sep = ['en-US', 'pt-BR'].includes(loc.locale) ? 'dot' : 'comma';
+    document.getElementById('decimal-select').value = db.settings.decimal_sep;
+  }
+  saveDB();
+  updateCurrencyPreview();
+}
+
+function onDecimalChange() {
+  db.settings.decimal_sep = document.getElementById('decimal-select').value;
+  saveDB();
+  updateCurrencyPreview();
+}
+
+function updateCurrencyPreview() {
+  const loc = getLocale();
+  const example = formatPrice(1234.5);
+  document.getElementById('currency-preview').textContent = `${loc.currency} · ej: ${example}`;
+}
+
+// ── ACCOUNT ──
+function renderAccount() {
+  const u = db.settings?.user || {};
+  const firstname = u.firstname || '';
+  const lastname = u.lastname || '';
+  const email = u.email || '';
+  const avatar = u.avatar || '';
+
+  document.getElementById('account-firstname').value = firstname;
+  document.getElementById('account-lastname').value = lastname;
+  document.getElementById('account-email').value = email;
+
+  // Big avatar
+  const bigEl = document.getElementById('account-avatar-el');
+  if (avatar) {
+    bigEl.innerHTML = `<img src="${avatar}" alt="Avatar">`;
+  } else {
+    const initials = ((firstname[0] || '') + (lastname[0] || '')).toUpperCase() || '?';
+    bigEl.textContent = initials;
+    bigEl.style.fontSize = initials === '?' ? '28px' : '32px';
+  }
+
+  updateSidebarAccount();
+}
+
+function updateSidebarAccount() {
+  const u = db.settings?.user || {};
+  const fullname = [u.firstname, u.lastname].filter(Boolean).join(' ');
+  const avatar = u.avatar || '';
+  const initials = ((u.firstname?.[0] || '') + (u.lastname?.[0] || '')).toUpperCase() || '?';
+
+  document.getElementById('sidebar-name').textContent = fullname || 'Mi Cuenta';
+  document.getElementById('sidebar-email').textContent = u.email || 'Tocá para editar';
+
+  const sideEl = document.getElementById('sidebar-avatar-el');
+  if (avatar) {
+    sideEl.innerHTML = `<img src="${avatar}" alt="">`;
+  } else {
+    sideEl.textContent = initials;
+  }
+}
+
+function onAccountInput() {
+  // live update sidebar as user types
+  if (!db.settings.user) db.settings.user = {};
+  db.settings.user.firstname = document.getElementById('account-firstname').value.trim();
+  db.settings.user.lastname  = document.getElementById('account-lastname').value.trim();
+  db.settings.user.email     = document.getElementById('account-email').value.trim();
+  updateSidebarAccount();
+}
+
+function saveAccount() {
+  if (!db.settings.user) db.settings.user = {};
+  db.settings.user.firstname = document.getElementById('account-firstname').value.trim();
+  db.settings.user.lastname  = document.getElementById('account-lastname').value.trim();
+  db.settings.user.email     = document.getElementById('account-email').value.trim();
+  saveDB();
+  renderAccount();
+  toast('Datos guardados ✓');
+}
+
+function onAvatarChange(e) {
+  const file = e.target.files?.[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    if (!db.settings.user) db.settings.user = {};
+    db.settings.user.avatar = ev.target.result;
+    saveDB();
+    renderAccount();
+  };
+  reader.readAsDataURL(file);
+}
+
+// ── UTILS ──
+function esc(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+// ── INIT ──
+if (!db.settings) db.settings = { country: 'AR', decimal_sep: 'comma' };
+if (!db.settings.user) db.settings.user = {};
+renderSettings();
+renderAccount();
+</script>
+</body>
+</html>
