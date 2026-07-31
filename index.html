@@ -1304,7 +1304,7 @@ function addToCart() {
   currentSession.total = parseFloat(currentSession.items.reduce((s, i) => s + i.subtotal, 0).toFixed(2));
   renderShop();
   showScreen('shop');
-  toast(`${name} agregado ✓`);
+  toast(`Agregado ✓`);
 }
 
 // ── SHOP ──
