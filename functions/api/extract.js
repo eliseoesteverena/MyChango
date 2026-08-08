@@ -23,8 +23,8 @@ export async function onRequest(context) {
 
   try {
     // Secret desde Cloudflare
-    const GROQ_API_KEY = context.env.GROQ_API_KEY;
-    if (!GROQ_API_KEY) {
+    const GEMINI_API_KEY = context.env.GEMINI_API_KEY;
+    if (!GEMINI_API_KEY) {
       return new Response(JSON.stringify({
         error: "API Key no configurada en el servidor",
         step: "env_check"
@@ -33,6 +33,10 @@ export async function onRequest(context) {
         headers: { "Content-Type": "application/json", ...CORS_HEADERS }
       });
     }
+
+    // Modelo de Gemini a usar — modificar acá para cambiarlo fácilmente.
+    // Verificá el nombre vigente en https://ai.google.dev/gemini-api/docs/models
+    const GEMINI_MODEL = "gemini-3.5-flash-lite";
 
     // Parsear body
     let body;
@@ -80,34 +84,34 @@ Extraé SOLO la información visible. Si no podés identificar un campo con clar
 Respondé ÚNICAMENTE con un objeto JSON sin backticks ni texto adicional:
 {"name":"nombre del producto o null","unit_price":número o null,"currency":"símbolo o null"}`;
 
-    // Llamada a Groq
-    let groqResponse;
+    // Llamada a Gemini
+    let geminiResponse;
     try {
-      groqResponse = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${GROQ_API_KEY}`
-        },
-        body: JSON.stringify({
-          model: 'qwen/qwen3.6-27b',
-          temperature: 0.2,
-          max_completion_tokens: 4096,
-          top_p: 1,
-          stream: false,
-          messages: [{
-            role: 'user',
-            content: [
-              { type: 'text', text: prompt },
-              { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${base64}` } }
-            ]
-          }]
-        })
-      });
+      geminiResponse = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{
+              role: 'user',
+              parts: [
+                { text: prompt },
+                { inline_data: { mime_type: 'image/jpeg', data: base64 } }
+              ]
+            }],
+            generationConfig: {
+              temperature: 0.2,
+              maxOutputTokens: 4096,
+              topP: 1
+            }
+          })
+        }
+      );
     } catch (e) {
       return new Response(JSON.stringify({
-        error: "No se pudo conectar con Groq API",
-        step: "groq_fetch",
+        error: "No se pudo conectar con Gemini API",
+        step: "gemini_fetch",
         detail: e.message
       }), {
         status: 502,
@@ -115,29 +119,29 @@ Respondé ÚNICAMENTE con un objeto JSON sin backticks ni texto adicional:
       });
     }
 
-    // Groq devolvió error HTTP
-    if (!groqResponse.ok) {
-      let groqError = '';
-      try { groqError = await groqResponse.text(); } catch {}
+    // Gemini devolvió error HTTP
+    if (!geminiResponse.ok) {
+      let geminiError = '';
+      try { geminiError = await geminiResponse.text(); } catch {}
       return new Response(JSON.stringify({
-        error: `Groq rechazó la solicitud (HTTP ${groqResponse.status})`,
-        step: "groq_response",
-        groq_status: groqResponse.status,
-        groq_body: groqError.slice(0, 500)  // truncar para no inflar el log
+        error: `Gemini rechazó la solicitud (HTTP ${geminiResponse.status})`,
+        step: "gemini_response",
+        gemini_status: geminiResponse.status,
+        gemini_body: geminiError.slice(0, 500)  // truncar para no inflar el log
       }), {
         status: 502,
         headers: { "Content-Type": "application/json", ...CORS_HEADERS }
       });
     }
 
-    // Parsear respuesta de Groq
+    // Parsear respuesta de Gemini
     let data;
     try {
-      data = await groqResponse.json();
+      data = await geminiResponse.json();
     } catch (e) {
       return new Response(JSON.stringify({
-        error: "Respuesta de Groq no es JSON válido",
-        step: "groq_json_parse",
+        error: "Respuesta de Gemini no es JSON válido",
+        step: "gemini_json_parse",
         detail: e.message
       }), {
         status: 502,
@@ -145,12 +149,12 @@ Respondé ÚNICAMENTE con un objeto JSON sin backticks ni texto adicional:
       });
     }
 
-    const raw = data?.choices?.[0]?.message?.content || '';
+    const raw = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
 
     if (!raw) {
       return new Response(JSON.stringify({
-        error: "Groq devolvió respuesta vacía",
-        step: "groq_content_empty",
+        error: "Gemini devolvió respuesta vacía",
+        step: "gemini_content_empty",
         full_response: JSON.stringify(data).slice(0, 500)
       }), {
         status: 502,
