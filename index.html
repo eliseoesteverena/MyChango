@@ -1449,6 +1449,54 @@ function blobToBase64(blob) {
   });
 }
 
+// ── VOZ · PREPARAR AUDIO ──
+// Decodifica lo grabado y lo pasa a WAV 16 kHz mono (formato que aceptan todos los modelos
+// de voz, sin depender de webm/mp4 según el navegador). De paso mide el nivel de la señal.
+const SILENCE_PEAK = 0.005;   // por debajo de esto el micrófono no captó nada
+
+function encodeWav16(pcm, rate) {
+  const buf = new ArrayBuffer(44 + pcm.length * 2);
+  const v = new DataView(buf);
+  const w = (o, str) => { for (let i = 0; i < str.length; i++) v.setUint8(o + i, str.charCodeAt(i)); };
+  w(0, 'RIFF'); v.setUint32(4, 36 + pcm.length * 2, true); w(8, 'WAVE');
+  w(12, 'fmt '); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+  v.setUint32(24, rate, true); v.setUint32(28, rate * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true);
+  w(36, 'data'); v.setUint32(40, pcm.length * 2, true);
+  for (let i = 0; i < pcm.length; i++) {
+    const x = Math.max(-1, Math.min(1, pcm[i]));
+    v.setInt16(44 + i * 2, x < 0 ? x * 0x8000 : x * 0x7fff, true);
+  }
+  return new Blob([buf], { type: 'audio/wav' });
+}
+
+async function prepareAudio(blob, mime) {
+  const AC = window.AudioContext || window.webkitAudioContext;
+  const OAC = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+  if (AC && OAC) {
+    let ctx;
+    try {
+      ctx = new AC();
+      const decoded = await ctx.decodeAudioData(await blob.arrayBuffer());
+      const off = new OAC(1, Math.max(1, Math.ceil(decoded.duration * 16000)), 16000);
+      const src = off.createBufferSource();
+      src.buffer = decoded; src.connect(off.destination); src.start();
+      const pcm = (await off.startRendering()).getChannelData(0);
+      let peak = 0, sum = 0;
+      for (let i = 0; i < pcm.length; i++) { const a = Math.abs(pcm[i]); if (a > peak) peak = a; sum += pcm[i] * pcm[i]; }
+      const wav = encodeWav16(pcm, 16000);
+      return {
+        base64: await blobToBase64(wav), mime: 'audio/wav', size: wav.size, converted: true,
+        peak: +peak.toFixed(4), rms: +Math.sqrt(sum / Math.max(1, pcm.length)).toFixed(4)
+      };
+    } catch (e) {
+      log('warn', 'No se pudo convertir a WAV; se envía el audio original', { name: e.name, message: e.message, mime });
+    } finally {
+      try { ctx && ctx.close(); } catch {}
+    }
+  }
+  return { base64: await blobToBase64(blob), mime, size: blob.size, converted: false, peak: null, rms: null };
+}
+
 // ── VOZ · PIPELINE ──
 // audio → /api/transcribe (Gemini 3.5 Transcribe, SMART) → regex local
 //       → si el regex no alcanza: /api/extract (Flash-Lite, solo texto)
@@ -1507,14 +1555,27 @@ async function runPipeline(p) {
   renderShop();
 
   try {
-    // 1) Transcripción (Gemini 3.5 Transcribe · SMART)
+    // 1) Transcripción (Gemini 3.5 Transcribe · SMART, con fallback a Flash-Lite en el servidor)
     if (!p.transcript) {
-      if (!p.audio) p.audio = await blobToBase64(p.blob);
+      if (!p.audio) {
+        const tPrep = performance.now();
+        const prep = await prepareAudio(p.blob, p.mime);
+        timings.prep_ms = Math.round(performance.now() - tPrep);
+        if (!stillActive(p)) return;
+        p.audio = prep.base64; p.mime = prep.mime; p.blob = null;
+        p.level = { peak: prep.peak, rms: prep.rms };
+        log('info', 'Audio preparado', { mime: prep.mime, size_kb: Math.round(prep.size / 1024), converted_to_wav: prep.converted, peak: prep.peak, rms: prep.rms, ms: timings.prep_ms });
+        // Casi silencio: no vale la pena gastar una llamada (y el problema es el micrófono, no la IA)
+        if (prep.peak != null && prep.peak < SILENCE_PEAK) {
+          throw pipelineError('silent', 'No se captó sonido. Revisá el micrófono y hablá más cerca.', false);
+        }
+      }
       const t = performance.now();
       const tr = await apiPost('/api/transcribe', { audio: p.audio, mime_type: p.mime, loc: apiLoc });
       timings.transcribe_ms = Math.round(performance.now() - t);
       if (!stillActive(p)) return;
       p.transcript = (tr.text || '').trim();
+      p.serverDebug = tr._debug;
       log('info', 'Transcripción lista', { text: p.transcript, ms: timings.transcribe_ms, server: tr._debug });
     }
     if (!p.transcript) throw pipelineError('empty', 'No se escuchó nada. Probá de nuevo.', false);
@@ -1555,7 +1616,7 @@ async function runPipeline(p) {
     if (!pending.includes(p)) return;
     p.status = 'error'; p.error = e.message; p.retryable = !!e.retryable;
     log(e.retryable ? 'warn' : 'error', `Dictado no procesado (${e.step || 'error'}): ${e.message}`, {
-      step: e.step, transcript: p.transcript, timings, server: e.data,
+      step: e.step, transcript: p.transcript, level: p.level, timings, server: e.data || p.serverDebug,
     });
     renderShop();
   }

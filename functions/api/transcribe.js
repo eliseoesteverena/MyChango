@@ -1,17 +1,26 @@
 // functions/api/transcribe.js
-// POST { audio: <base64>, mime_type: "audio/webm;codecs=opus", loc: { country } }
-//  →  { text: "Azúcar 1 kilo 1250", _debug: { step, ms, ... } }
+// POST { audio: <base64>, mime_type: "audio/wav", loc: { country } }
+//  →  { text: "Azúcar 1 kilo 1250", _debug: { step, ms, model, fallback_used, primary, fallback } }
 //
-// Usa Gemini 3.5 Transcribe en modo SMART (limpia muletillas, resuelve
-// autocorrecciones y normaliza números/monedas). El parseo del precio
-// se hace en el cliente (regex); acá solo se transcribe.
+// 1) Gemini 3.5 Transcribe en modo SMART (limpia muletillas, normaliza números/monedas).
+// 2) Si devuelve texto vacío o falla, reintenta con Flash-Lite (audio + prompt de transcripción).
+//    Motivo: se reportó que gemini-3.5-transcribe puede responder HTTP 200 con salida vacía
+//    (foro de Google AI, agosto 2026). Con Flash-Lite ese mismo audio se transcribe bien.
+// El parseo del precio se hace en el cliente (regex); acá solo se transcribe.
+//
+// Variables de entorno:
+//   GEMINI_API_KEY      (obligatoria)
+//   TRANSCRIBE_PRIMARY  "flash-lite" para saltear Transcribe y ir directo a Flash-Lite
+//                       (ahorra ~1,5 s por dictado si Transcribe sigue devolviendo vacío)
+//   ALLOWED_ORIGIN      (opcional) ej. https://mychango.pages.dev
 
-const GEMINI_TRANSCRIBE_MODEL = "gemini-3.5-transcribe";
-// Verificá el nombre vigente en https://ai.google.dev/gemini-api/docs/models
+const PRIMARY_MODEL = "gemini-3.5-transcribe";
+const FALLBACK_MODEL = "gemini-3.5-flash-lite";
+// Verificá los nombres vigentes en https://ai.google.dev/gemini-api/docs/models
 
-const MAX_AUDIO_B64_CHARS = 4_000_000; // ~3 MB; un dictado de 15 s pesa ~50 KB
+const MAX_AUDIO_B64_CHARS = 4_000_000; // ~3 MB; un dictado de 15 s en WAV 16 kHz mono pesa ~480 KB
 
-// Formatos que acepta Gemini 3.5 Transcribe
+// Formatos que aceptan los modelos de audio de Gemini
 const SUPPORTED_MIME = new Set([
   "audio/wav", "audio/mp3", "audio/aiff", "audio/aac", "audio/ogg", "audio/flac",
   "audio/mpeg", "audio/m4a", "audio/l16", "audio/opus", "audio/alaw", "audio/mulaw", "audio/webm",
@@ -23,6 +32,7 @@ const LANGUAGE_BY_COUNTRY = {
   UY: ["es-419"], PY: ["es-419"], BO: ["es-419"], VE: ["es-419"], EC: ["es-419"],
   BR: ["pt-BR"], ES: [], US: [],
 };
+const LANGUAGE_NAME_BY_COUNTRY = { BR: "portugués (Brasil)", US: "inglés o español", ES: "español (España)" };
 
 // Marcas frecuentes: sesgan el reconocimiento hacia nombres propios.
 // (Google recomienda hasta ~100 términos y evitar palabras comunes.)
@@ -59,6 +69,97 @@ function normalizeMime(mime) {
   if (base === "audio/mp4" || base === "audio/x-m4a") return "audio/m4a"; // Safari/iOS
   if (base === "audio/x-wav" || base === "audio/wave") return "audio/wav";
   return SUPPORTED_MIME.has(base) ? base : null;
+}
+
+// Llamada genérica a generateContent. Nunca lanza: devuelve { ok, data } o { ok:false, status, kind, detail }.
+async function callGemini(model, apiKey, body) {
+  let res;
+  try {
+    res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
+      body: JSON.stringify(body),
+    });
+  } catch (e) {
+    return { ok: false, status: 0, kind: "network", detail: e.message };
+  }
+  if (!res.ok) {
+    let detail = "";
+    try { detail = await res.text(); } catch {}
+    return { ok: false, status: res.status, kind: "http", detail: detail.slice(0, 500) };
+  }
+  try {
+    return { ok: true, data: await res.json() };
+  } catch (e) {
+    return { ok: false, status: 200, kind: "json", detail: e.message };
+  }
+}
+
+// El texto puede venir en parts[].text o (según la API) en parts[].audioTranscription.text
+function readTranscript(data) {
+  const parts = data?.candidates?.[0]?.content?.parts || [];
+  return parts
+    .map((p) => p?.text || p?.audioTranscription?.text || p?.audio_transcription?.text || "")
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+// Resumen para diagnosticar respuestas vacías (¿entró el audio? ¿cortó el modelo?)
+function summarize(data) {
+  const c = data?.candidates?.[0];
+  return {
+    finish_reason: c?.finishReason ?? null,
+    parts: (c?.content?.parts || []).length,
+    prompt_tokens: data?.usageMetadata?.promptTokenCount ?? null,
+    output_tokens: data?.usageMetadata?.candidatesTokenCount ?? 0,
+    block_reason: data?.promptFeedback?.blockReason ?? null,
+  };
+}
+
+function failure(r) {
+  return { error: `HTTP ${r.status || "—"} (${r.kind})`, detail: r.detail };
+}
+
+async function transcribePrimary(apiKey, audio, mimeType, country) {
+  const t0 = Date.now();
+  const languageCodes = LANGUAGE_BY_COUNTRY[country] ?? [];
+  const vocab = BRAND_VOCAB[country] || [];
+  const call = (audioTranscriptionConfig) =>
+    callGemini(PRIMARY_MODEL, apiKey, {
+      contents: [{ role: "user", parts: [{ inlineData: { mimeType, data: audio } }] }],
+      generationConfig: { audioTranscriptionConfig },
+    });
+
+  let usedVocab = vocab.length > 0;
+  let r = await call({ mode: "SMART", languageCodes, ...(usedVocab ? { customVocabulary: vocab } : {}) });
+  // Si el vocabulario no es compatible con el modo, reintenta sin él.
+  if (!r.ok && r.status === 400 && usedVocab) {
+    usedVocab = false;
+    r = await call({ mode: "SMART", languageCodes });
+  }
+  const info = { model: PRIMARY_MODEL, ms: Date.now() - t0, vocab: usedVocab };
+  if (!r.ok) return { text: "", info: { ...info, ...failure(r) }, failed: r };
+  return { text: readTranscript(r.data), info: { ...info, ...summarize(r.data) } };
+}
+
+async function transcribeFallback(apiKey, audio, mimeType, country) {
+  const t0 = Date.now();
+  const language = LANGUAGE_NAME_BY_COUNTRY[country] || "español";
+  const prompt =
+    `Transcribí este audio literalmente, en ${language}. Es un dictado corto: el nombre de un producto ` +
+    `de supermercado y su precio. Escribí los números con dígitos (por ejemplo 1250, no "mil doscientos ` +
+    `cincuenta"). Respondé SOLO con el texto transcripto, sin comillas ni comentarios. ` +
+    `Si no se escucha ninguna voz, respondé exactamente: [sin voz]`;
+  const r = await callGemini(FALLBACK_MODEL, apiKey, {
+    contents: [{ role: "user", parts: [{ inlineData: { mimeType, data: audio } }, { text: prompt }] }],
+    generationConfig: { temperature: 0, maxOutputTokens: 256 },
+  });
+  const info = { model: FALLBACK_MODEL, ms: Date.now() - t0 };
+  if (!r.ok) return { text: "", info: { ...info, ...failure(r) }, failed: r };
+  let text = readTranscript(r.data).replace(/^["“«]+|["”»]+$/g, "").trim();
+  if (/^\[?\s*sin voz\s*\]?\.?$/i.test(text)) text = "";
+  return { text, info: { ...info, ...summarize(r.data) } };
 }
 
 export async function onRequest(context) {
@@ -102,64 +203,51 @@ export async function onRequest(context) {
     if (!mimeType) {
       return json(env, { error: `Formato de audio no soportado: ${mime_type || "?"}`, step: "input_validation" }, 415);
     }
-
     const country = loc?.country || "AR";
-    const languageCodes = LANGUAGE_BY_COUNTRY[country] ?? [];
-    const vocab = BRAND_VOCAB[country] || [];
-
-    const callGemini = (audioTranscriptionConfig) =>
-      fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_TRANSCRIBE_MODEL}:generateContent`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "x-goog-api-key": GEMINI_API_KEY },
-          body: JSON.stringify({
-            contents: [{ role: "user", parts: [{ inlineData: { mimeType, data: audio } }] }],
-            generationConfig: { audioTranscriptionConfig },
-          }),
-        }
-      );
 
     const t0 = Date.now();
-    let usedVocab = vocab.length > 0;
-    let res;
-    try {
-      const cfg = { mode: "SMART", languageCodes, ...(usedVocab ? { customVocabulary: vocab } : {}) };
-      res = await callGemini(cfg);
-      // Si el vocabulario no es compatible con el modo, reintenta sin él.
-      if (res.status === 400 && usedVocab) {
-        usedVocab = false;
-        res = await callGemini({ mode: "SMART", languageCodes });
-      }
-    } catch (e) {
-      return json(env, { error: "No se pudo conectar con Gemini API", step: "gemini_fetch", detail: e.message }, 502);
+    const debug = { step: "ok", mime: mimeType, fallback_used: false };
+    let text = "";
+    let modelUsed = null;
+    let lastFailure = null;
+
+    // 1) Gemini 3.5 Transcribe (salvo que TRANSCRIBE_PRIMARY=flash-lite)
+    if (env.TRANSCRIBE_PRIMARY !== "flash-lite") {
+      const p = await transcribePrimary(GEMINI_API_KEY, audio, mimeType, country);
+      debug.primary = p.info;
+      text = p.text;
+      if (text) modelUsed = PRIMARY_MODEL;
+      if (p.failed) lastFailure = p.failed;
     }
 
-    if (!res.ok) {
-      let geminiError = "";
-      try { geminiError = await res.text(); } catch {}
+    // 2) Fallback: Flash-Lite (audio + prompt de transcripción)
+    if (!text) {
+      const f = await transcribeFallback(GEMINI_API_KEY, audio, mimeType, country);
+      debug.fallback = f.info;
+      debug.fallback_used = env.TRANSCRIBE_PRIMARY !== "flash-lite";
+      if (f.failed) {
+        lastFailure = f.failed;
+      } else {
+        lastFailure = null;
+        text = f.text;
+        modelUsed = FALLBACK_MODEL;
+      }
+    }
+
+    debug.ms = Date.now() - t0;
+    debug.model = modelUsed;
+
+    if (lastFailure) {
       return json(env, {
-        error: `Gemini rechazó la solicitud (HTTP ${res.status})`,
+        error: `Gemini rechazó la solicitud (${lastFailure.status ? "HTTP " + lastFailure.status : lastFailure.kind})`,
         step: "gemini_response",
-        gemini_status: res.status,
-        gemini_body: geminiError.slice(0, 500),
+        gemini_status: lastFailure.status,
+        gemini_body: lastFailure.detail,
+        _debug: debug,
       }, 502);
     }
 
-    let data;
-    try {
-      data = await res.json();
-    } catch (e) {
-      return json(env, { error: "Respuesta de Gemini no es JSON válido", step: "gemini_json_parse", detail: e.message }, 502);
-    }
-
-    const parts = data?.candidates?.[0]?.content?.parts || [];
-    const text = parts.map((p) => p.text || "").join(" ").replace(/\s+/g, " ").trim();
-
-    return json(env, {
-      text,
-      _debug: { step: "ok", ms: Date.now() - t0, model: GEMINI_TRANSCRIBE_MODEL, mime: mimeType, vocab: usedVocab },
-    });
+    return json(env, { text, _debug: debug });
   } catch (error) {
     console.error("Error inesperado en /api/transcribe:", error);
     return json(env, { error: "Error interno inesperado", step: "uncaught", detail: error.message }, 500);
