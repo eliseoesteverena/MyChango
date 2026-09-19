@@ -582,6 +582,17 @@
   .product-unit.err-text { color: #9B1C1C; white-space: normal; }
   .product-retry:active { color: var(--ink); }
 
+  .mic-help {
+    display: none; position: fixed; left: 16px; right: 16px; bottom: 176px; z-index: 11;
+    align-items: flex-start; gap: 10px; padding: 12px 8px 12px 14px;
+    background: #FFF1EE; color: #7A1F14; border: 1px solid #F3C9C1; border-radius: 14px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+  }
+  .mic-help.open { display: flex; }
+  .mic-help-text { flex: 1; display: flex; flex-direction: column; gap: 3px; font-size: 13px; line-height: 1.4; }
+  .mic-help-text strong { font-size: 14px; }
+  .mic-help-close { width: 32px; height: 32px; flex-shrink: 0; border: none; background: none; color: inherit; font-size: 16px; cursor: pointer; }
+
   #toast { bottom: 184px; }   /* por encima de los botones flotantes */
 
   @media (prefers-reduced-motion: reduce) {
@@ -646,6 +657,11 @@
     <span class="rec-time" id="rec-time">0:00</span>
     <span class="rec-hint">Decí producto y precio</span>
     <button class="rec-cancel" onclick="cancelRecording()" aria-label="Cancelar grabación">✕</button>
+  </div>
+
+  <div class="mic-help" id="mic-help" role="alert">
+    <div class="mic-help-text"><strong id="mic-help-title"></strong><span id="mic-help-hint"></span></div>
+    <button class="mic-help-close" onclick="hideMicHelp()" aria-label="Cerrar">✕</button>
   </div>
 
   <button class="fab fab-secondary" id="manual-btn" onclick="openManualEntry()" aria-label="Cargar a mano">
@@ -1263,23 +1279,30 @@ function toggleRecording() {
 }
 
 async function startRecording() {
-  if (recState !== 'idle' || !currentSession) return;
-  if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
-    log('error', 'Este navegador no permite grabar audio', { hasMediaDevices: !!navigator.mediaDevices, hasMediaRecorder: typeof MediaRecorder !== 'undefined' });
-    toast('Tu navegador no permite grabar — cargá a mano');
+  if (recState === 'starting') { toast('Esperando el permiso del micrófono…'); return; }
+  if (recState !== 'idle') return;
+  if (!currentSession) newSession();
+  hideMicHelp();
+
+  // Requisitos del navegador: contexto seguro (HTTPS/localhost), getUserMedia y MediaRecorder
+  if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
+    reportMicProblem(null);
     return;
   }
+
   recState = 'starting';
   recCancelled = false;
+  const slow = setTimeout(() => toast('Esperando el permiso… si no ves el pedido, abrí la app en Chrome o Safari'), 6000);
   let stream;
   try {
-    stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true } });
+    stream = await getMicStream();
   } catch (e) {
+    clearTimeout(slow);
     recState = 'idle';
-    log('error', 'Permiso de micrófono denegado o no disponible', { message: e.message, name: e.name });
-    toast('Sin acceso al micrófono — podés cargar a mano');
+    reportMicProblem(e);
     return;
   }
+  clearTimeout(slow);
   if (recCancelled) { stream.getTracks().forEach(t => t.stop()); recState = 'idle'; return; }
 
   recStream = stream;
@@ -1304,6 +1327,67 @@ async function startRecording() {
   recAutoStop = setTimeout(() => { toast('Máximo 15 segundos'); stopRecording(); }, VOICE_MAX_MS);
   navigator.vibrate?.(20);
   log('info', 'Grabando', { mime: recorder.mimeType });
+}
+
+// Pide el micrófono; si el dispositivo no acepta las restricciones, reintenta con las mínimas.
+async function getMicStream() {
+  try {
+    return await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true } });
+  } catch (e) {
+    if (e.name === 'OverconstrainedError' || e.name === 'ConstraintNotSatisfiedError') {
+      return navigator.mediaDevices.getUserMedia({ audio: true });
+    }
+    throw e;
+  }
+}
+
+// ── VOZ · DIAGNÓSTICO DE MICRÓFONO ──
+// Cuando el micrófono no arranca, explica la causa real (HTTP, política del servidor,
+// permiso bloqueado, navegador embebido…) en un aviso que queda hasta cerrarlo,
+// y guarda el detalle técnico en Logs.
+async function reportMicProblem(err) {
+  const info = {
+    error: err ? `${err.name}: ${err.message}` : null,
+    secure_context: window.isSecureContext,
+    origin: location.origin,
+    has_media_devices: !!navigator.mediaDevices?.getUserMedia,
+    has_media_recorder: typeof MediaRecorder !== 'undefined',
+    policy_allows_mic: null,
+    permission_state: null,
+    user_agent: navigator.userAgent
+  };
+  try {
+    const pol = document.permissionsPolicy || document.featurePolicy;
+    if (pol?.allowsFeature) info.policy_allows_mic = pol.allowsFeature('microphone');
+  } catch {}
+  try { info.permission_state = (await navigator.permissions.query({ name: 'microphone' })).state; } catch {}
+  const problem = describeMicProblem(err, info);
+  log('error', `Micrófono: ${problem.title}`, info);
+  showMicHelp(problem);
+}
+
+function describeMicProblem(err, i) {
+  const n = err?.name;
+  if (!i.secure_context) return { title: 'El micrófono requiere HTTPS', hint: `Estás en ${i.origin}. Abrí la app desde una dirección https:// (o localhost).` };
+  if (i.policy_allows_mic === false) return { title: 'El sitio bloquea el micrófono', hint: 'El servidor envía una Permissions-Policy que lo impide. Revisá el archivo _headers de Cloudflare Pages: tiene que permitir microphone=(self).' };
+  if (!i.has_media_devices) return { title: 'Este navegador no expone el micrófono', hint: 'Si abriste el link desde otra app (WhatsApp, Instagram…), abrilo en Chrome o Safari.' };
+  if (!i.has_media_recorder) return { title: 'Este navegador no puede grabar audio', hint: 'Actualizá el navegador (en iPhone hace falta iOS 14.3 o superior).' };
+  if (n === 'NotFoundError' || n === 'DevicesNotFoundError') return { title: 'No se encontró un micrófono', hint: 'Revisá que el dispositivo tenga uno disponible.' };
+  if (n === 'NotReadableError' || n === 'TrackStartError' || n === 'AbortError') return { title: 'No se pudo usar el micrófono', hint: 'Probablemente otra app lo esté usando. Cerrala e intentá de nuevo.' };
+  if (n === 'NotAllowedError' && i.permission_state === 'prompt') return { title: 'Se cerró el pedido de permiso', hint: 'Volvé a tocar el micrófono y elegí "Permitir".' };
+  if (i.permission_state === 'denied' || n === 'NotAllowedError' || n === 'PermissionDeniedError' || n === 'SecurityError') {
+    return { title: 'Micrófono bloqueado para este sitio', hint: 'Tocá el candado (o "aA" en iPhone) de la barra de direcciones → Permisos / Ajustes del sitio → Micrófono → Permitir, y recargá.' };
+  }
+  return { title: 'No se pudo iniciar la grabación', hint: `${n || 'Error'}: ${err?.message || 'motivo desconocido'}` };
+}
+
+function showMicHelp(p) {
+  document.getElementById('mic-help-title').textContent = p.title;
+  document.getElementById('mic-help-hint').textContent = p.hint + ' Mientras tanto podés cargar a mano con +.';
+  document.getElementById('mic-help').classList.add('open');
+}
+function hideMicHelp() {
+  document.getElementById('mic-help')?.classList.remove('open');
 }
 
 function stopRecording() {
