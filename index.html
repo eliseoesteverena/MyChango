@@ -544,7 +544,7 @@
   .product-item.enter { animation: fadeIn 0.2s ease; }
 
   .fab-secondary {
-    right: 104px; bottom: 106px; width: 52px; height: 52px;
+    right: 104px; bottom: calc(var(--voice-bottom, 100px) + 6px); width: 52px; height: 52px;
     background: white; border: 1px solid var(--line); border-radius: 16px;
     box-shadow: 0 4px 14px rgba(0,0,0,0.08);
   }
@@ -556,7 +556,7 @@
   }
 
   .rec-bar {
-    display: none; position: fixed; left: 24px; right: 104px; bottom: 100px; height: 64px;
+    display: none; position: fixed; left: 24px; right: 104px; bottom: var(--voice-bottom, 100px); height: 64px;
     padding: 0 10px 0 18px; align-items: center; gap: 12px; z-index: 10;
     background: var(--ink); color: var(--bg); border-radius: 20px;
     box-shadow: 0 8px 24px rgba(0,0,0,0.18);
@@ -583,7 +583,7 @@
   .product-retry:active { color: var(--ink); }
 
   .mic-help {
-    display: none; position: fixed; left: 16px; right: 16px; bottom: 176px; z-index: 11;
+    display: none; position: fixed; left: 16px; right: 16px; bottom: calc(var(--voice-bottom, 100px) + 76px); z-index: 11;
     align-items: flex-start; gap: 10px; padding: 12px 8px 12px 14px;
     background: #FFF1EE; color: #7A1F14; border: 1px solid #F3C9C1; border-radius: 14px;
     box-shadow: 0 8px 24px rgba(0,0,0,0.12);
@@ -593,14 +593,110 @@
   .mic-help-text strong { font-size: 14px; }
   .mic-help-close { width: 32px; height: 32px; flex-shrink: 0; border: none; background: none; color: inherit; font-size: 16px; cursor: pointer; }
 
-  #toast { bottom: 184px; }   /* por encima de los botones flotantes */
+  #toast { bottom: calc(var(--voice-bottom, 100px) + 84px); }   /* por encima de los botones flotantes */
 
   @media (prefers-reduced-motion: reduce) {
     .rec-dot, .fab.recording, .empty-state .arrow { animation: none; }
   }
+
+  /* ── CONTROLES DE VOZ COMPARTIDOS (Compra y Gastos) ── */
+  body { --voice-bottom: 100px; }                        /* Compra: encima del botón "Finalizar" */
+  body[data-screen="expense"] { --voice-bottom: 24px; }  /* Gastos: no hay botón inferior */
+  #voice-controls { display: none; }
+  body[data-screen="shop"] #voice-controls,
+  body[data-screen="expense"] #voice-controls { display: block; }
+  .fab { bottom: var(--voice-bottom, 100px); }
+
+  .snack {
+    display: none; position: fixed; left: 16px; right: 16px; z-index: 998;
+    bottom: calc(var(--voice-bottom, 100px) + 84px);
+    align-items: center; gap: 8px; padding: 10px 6px 10px 16px;
+    background: var(--ink); color: white; border-radius: 14px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.2); font-size: 14px; font-weight: 500;
+  }
+  .snack.show { display: flex; animation: fadeIn 0.2s ease; }
+  .snack-text { flex: 1; min-width: 0; line-height: 1.35; }
+  .snack-actions { display: flex; flex-shrink: 0; }
+  .snack-actions button {
+    background: none; border: none; color: #7DDBA3; font: inherit; font-weight: 700;
+    padding: 8px 10px; border-radius: 8px; cursor: pointer;
+  }
+  .snack-actions button:active { background: rgba(255,255,255,0.12); }
+
+  .empty-state .empty-tip { margin-top: 18px; font-size: 13px; }
+  .day-header {
+    padding: 14px 20px 6px; font-size: 11px; text-transform: uppercase;
+    letter-spacing: 1px; font-weight: 600; color: var(--muted);
+  }
+
+  /* ── CATEGORÍAS (chips, colores, pantalla) ── */
+  .cat-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+  .cat-dot.big { width: 14px; height: 14px; }
+  .cat-picker { display: flex; flex-wrap: wrap; gap: 8px; }
+  .cat-chip {
+    display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px;
+    background: white; border: 1.5px solid var(--line); border-radius: 100px;
+    font-family: var(--font); font-size: 14px; font-weight: 600; color: var(--ink); cursor: pointer;
+  }
+  .cat-chip.selected { background: var(--ink); border-color: var(--ink); color: var(--bg); }
+  .cat-chip-new { border-style: dashed; color: var(--muted); }
+  .cat-chip.small { padding: 2px 8px; font-size: 12px; border-width: 1px; cursor: default; }
+  .dot-sep { margin: 0 6px; }
+
+  .summary-meta { display: flex; flex-direction: column; gap: 16px; }
+  .hd-head { display: flex; align-items: flex-start; gap: 12px; }
+  .hd-head-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+  .hd-name { font-size: 20px; font-weight: 800; letter-spacing: -0.4px; }
+  .hd-sub { font-size: 13px; color: var(--muted); }
+  .hd-edit {
+    background: none; border: none; color: var(--ink); font-family: var(--font);
+    font-size: 15px; font-weight: 700; cursor: pointer; padding: 6px 4px;
+  }
+  .rec-delete {
+    background: none; border: none; color: var(--red); font-family: var(--font);
+    font-size: 14px; font-weight: 600; padding: 10px; cursor: pointer;
+  }
+
+  #rec-overlay, #cat-overlay {
+    display: none; position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 500;
+    align-items: flex-end; justify-content: center;
+  }
+  #cat-overlay { z-index: 510; }
+  #rec-overlay.open, #cat-overlay.open { display: flex; }
+  #rec-overlay .edit-sheet, #cat-overlay .edit-sheet { max-height: 92dvh; overflow-y: auto; }
+
+  .swatches { display: flex; flex-wrap: wrap; gap: 10px; }
+  .swatch {
+    width: 36px; height: 36px; border-radius: 50%; cursor: pointer;
+    border: 3px solid transparent; box-shadow: inset 0 0 0 2px rgba(255,255,255,0.7);
+  }
+  .swatch.selected { border-color: var(--ink); }
+
+  #categories { overflow-y: auto; }
+  .cat-body { padding: 16px 24px 60px; display: flex; flex-direction: column; gap: 18px; }
+  .month-nav { display: flex; align-items: center; gap: 12px; }
+  .month-btn {
+    width: 40px; height: 40px; border: none; border-radius: 12px; background: var(--line);
+    color: var(--ink); font-size: 22px; cursor: pointer;
+  }
+  .month-btn:disabled { opacity: 0.35; cursor: default; }
+  .month-info { flex: 1; text-align: center; }
+  .month-label { font-size: 16px; font-weight: 700; }
+  .month-total { font-size: 13px; color: var(--muted); margin-top: 2px; }
+  .cat-list { background: white; border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+  .cat-row { display: flex; align-items: center; gap: 14px; padding: 14px 18px; border-bottom: 1px solid var(--line); cursor: pointer; }
+  .cat-row:last-child { border-bottom: none; }
+  .cat-row:active { background: var(--line); }
+  .cat-row-info { flex: 1; min-width: 0; }
+  .cat-row-name { font-size: 15px; font-weight: 600; }
+  .cat-row-sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .cat-bar { height: 4px; background: var(--line); border-radius: 4px; margin-top: 8px; overflow: hidden; }
+  .cat-bar span { display: block; height: 100%; border-radius: 4px; }
+  .cat-row-total { font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; flex-shrink: 0; min-width: 104px; text-align: right; }
+  .hist-sub { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin-top: 2px; }
 </style>
 </head>
-<body>
+<body data-screen="home">
 
 <!-- ══ SIDEBAR ══ -->
 <div id="sidebar-overlay" onclick="closeSidebar()"></div>
@@ -652,28 +748,25 @@
 
   <div class="product-list" id="product-list"></div>
 
-  <div class="rec-bar" id="rec-bar">
-    <span class="rec-dot"></span>
-    <span class="rec-time" id="rec-time">0:00</span>
-    <span class="rec-hint">Decí producto y precio</span>
-    <button class="rec-cancel" onclick="cancelRecording()" aria-label="Cancelar grabación">✕</button>
-  </div>
-
-  <div class="mic-help" id="mic-help" role="alert">
-    <div class="mic-help-text"><strong id="mic-help-title"></strong><span id="mic-help-hint"></span></div>
-    <button class="mic-help-close" onclick="hideMicHelp()" aria-label="Cerrar">✕</button>
-  </div>
-
-  <button class="fab fab-secondary" id="manual-btn" onclick="openManualEntry()" aria-label="Cargar a mano">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-  </button>
-  <button class="fab" id="mic-btn" onclick="toggleRecording()" aria-label="Grabar producto">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
-  </button>
-
   <div class="shop-footer">
     <button class="btn-finish" id="finish-btn" onclick="showSummary()" disabled>Finalizar compra</button>
   </div>
+</div>
+
+<!-- ══ SCREEN: EXPENSE ══ -->
+<div id="expense" class="screen">
+  <div class="page-header">
+    <button class="hamburger" onclick="openSidebar()">
+      <span></span><span></span><span></span>
+    </button>
+    <h2>Gastos</h2>
+    <span class="item-count" id="expense-count">0 hoy</span>
+  </div>
+  <div class="total-bar">
+    <span class="total-label">Hoy</span>
+    <span class="total-amount" id="expense-today">$0</span>
+  </div>
+  <div class="product-list" id="expense-list"></div>
 </div>
 
 <!-- ══ SCREEN: QTY / CONFIRM ══ -->
@@ -685,15 +778,15 @@
 
   <div class="qty-preview">
     <div>
-      <p class="qty-tag-label">Nombre del producto</p>
+      <p class="qty-tag-label" id="qty-name-label">Nombre del producto</p>
       <input class="edit-field" id="qty-product-name" type="text" placeholder="Nombre del producto">
-      <p class="qty-tag-label" style="margin-top:16px">Precio unitario</p>
+      <p class="qty-tag-label" id="qty-price-label" style="margin-top:16px">Precio unitario</p>
       <input class="edit-field" id="qty-unit-price-input" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00">
     </div>
 
-    <div class="qty-divider"></div>
+    <div class="qty-divider" id="qty-divider"></div>
 
-    <div>
+    <div id="qty-block">
       <p class="qty-tag-label">Cantidad</p>
       <div class="qty-selector">
         <button class="qty-btn" onclick="changeQty(-1)">−</button>
@@ -725,10 +818,20 @@
       <p class="total-label">Total</p>
       <p class="total-amount" id="summary-total">$0</p>
     </div>
+    <div class="summary-meta">
+      <div class="edit-sheet-field">
+        <label class="edit-sheet-label">Nombre</label>
+        <input class="edit-field" id="summary-name" type="text" maxlength="60" oninput="onSummaryName()">
+      </div>
+      <div class="edit-sheet-field">
+        <label class="edit-sheet-label">Categoría</label>
+        <div class="cat-picker" id="summary-cats"></div>
+      </div>
+    </div>
     <div class="summary-items" id="summary-items"></div>
   </div>
   <div class="summary-footer">
-    <button class="btn-new" onclick="newShopping()">Nueva compra</button>
+    <button class="btn-new" onclick="newShopping()">Listo</button>
   </div>
 </div>
 
@@ -751,12 +854,34 @@
     <button onclick="closeHistoryDetail()" style="background:none;border:none;font-size:15px;color:var(--muted);cursor:pointer;font-weight:500;">Cerrar</button>
   </div>
   <div class="hd-body">
-    <p id="hd-date" style="font-size:13px;color:var(--muted)"></p>
+    <div id="hd-meta"></div>
     <div class="summary-total-box">
       <p class="total-label">Total</p>
       <p class="total-amount" id="hd-total">$0</p>
     </div>
     <div class="summary-items" id="hd-items"></div>
+  </div>
+</div>
+
+<!-- ══ SCREEN: CATEGORIES ══ -->
+<div id="categories" class="screen">
+  <div class="page-header">
+    <button class="hamburger" onclick="openSidebar()">
+      <span></span><span></span><span></span>
+    </button>
+    <h2>Categorías</h2>
+    <button class="hd-edit" onclick="openCategorySheet()">+ Nueva</button>
+  </div>
+  <div class="cat-body">
+    <div class="month-nav">
+      <button class="month-btn" onclick="shiftCatMonth(-1)" aria-label="Mes anterior">‹</button>
+      <div class="month-info">
+        <div class="month-label" id="cat-month"></div>
+        <div class="month-total" id="cat-month-total"></div>
+      </div>
+      <button class="month-btn" id="cat-next" onclick="shiftCatMonth(1)" aria-label="Mes siguiente">›</button>
+    </div>
+    <div class="cat-list" id="cat-list"></div>
   </div>
 </div>
 
@@ -892,6 +1017,74 @@
   </div>
 </div>
 
+<!-- ══ EDIT RECORD SHEET ══ -->
+<div id="rec-overlay">
+  <div class="edit-sheet">
+    <div class="edit-sheet-title" id="rec-title">Editar</div>
+    <div class="edit-sheet-field">
+      <label class="edit-sheet-label">Nombre</label>
+      <input class="edit-field" id="rec-name" type="text" maxlength="60">
+    </div>
+    <div class="edit-sheet-field" id="rec-amount-field">
+      <label class="edit-sheet-label">Monto</label>
+      <input class="edit-field" id="rec-amount" type="number" inputmode="decimal" min="0" step="0.01">
+    </div>
+    <div class="edit-sheet-field">
+      <label class="edit-sheet-label">Categoría</label>
+      <div class="cat-picker" id="rec-cats"></div>
+    </div>
+    <div class="edit-sheet-actions">
+      <button class="edit-btn-cancel" onclick="closeRecordSheet()">Cancelar</button>
+      <button class="edit-btn-save" onclick="saveRecordSheet()">Guardar</button>
+    </div>
+    <button class="rec-delete" id="rec-delete-btn" onclick="deleteRecordFromSheet()">Eliminar gasto</button>
+  </div>
+</div>
+
+<!-- ══ CATEGORY SHEET ══ -->
+<div id="cat-overlay">
+  <div class="edit-sheet">
+    <div class="edit-sheet-title" id="cat-title">Nueva categoría</div>
+    <div class="edit-sheet-field">
+      <label class="edit-sheet-label">Nombre</label>
+      <input class="edit-field" id="cat-name" type="text" maxlength="24" placeholder="Ej: Mascotas">
+    </div>
+    <div class="edit-sheet-field">
+      <label class="edit-sheet-label">Color</label>
+      <div class="swatches" id="cat-swatches"></div>
+    </div>
+    <div class="edit-sheet-actions">
+      <button class="edit-btn-cancel" onclick="closeCategorySheet()">Cancelar</button>
+      <button class="edit-btn-save" onclick="saveCategorySheet()">Guardar</button>
+    </div>
+    <button class="rec-delete" id="cat-delete-btn" onclick="deleteCategoryFromSheet()">Eliminar categoría</button>
+  </div>
+</div>
+
+<!-- ══ CONTROLES DE VOZ (compartidos por Compra y Gastos) ══ -->
+<div id="voice-controls">
+  <div class="rec-bar" id="rec-bar">
+    <span class="rec-dot"></span>
+    <span class="rec-time" id="rec-time">0:00</span>
+    <span class="rec-hint">Decí producto y precio</span>
+    <button class="rec-cancel" onclick="cancelRecording()" aria-label="Cancelar grabación">✕</button>
+  </div>
+
+  <div class="mic-help" id="mic-help" role="alert">
+    <div class="mic-help-text"><strong id="mic-help-title"></strong><span id="mic-help-hint"></span></div>
+    <button class="mic-help-close" onclick="hideMicHelp()" aria-label="Cerrar">✕</button>
+  </div>
+
+  <button class="fab fab-secondary" id="manual-btn" onclick="openManualEntry()" aria-label="Cargar a mano">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+  </button>
+  <button class="fab" id="mic-btn" onclick="toggleRecording()" aria-label="Grabar producto">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+  </button>
+</div>
+
+<div class="snack" id="snack"><span class="snack-text" id="snack-text"></span><span class="snack-actions" id="snack-actions"></span></div>
+
 <!-- ══ TOAST ══ -->
 <div id="toast"></div>
 
@@ -916,36 +1109,74 @@ const COUNTRY_LOCALES = {
 
 // ── MODELO DE DATOS (localStorage) ──
 // {
-//   version: 3,
+//   version: 4,
 //   settings: { country, decimal_sep, user: { firstname, lastname, email, avatar } },
-//   active_session: <session> | null,     // compra en curso: se guarda en cada cambio
-//   sessions: [ <session> ]               // compras finalizadas
+//   categories: [ { id, name, color, created_at } ],
+//   active_session: <registro> | null,    // compra en curso: se guarda en cada cambio
+//   sessions: [ <registro> ]              // registros terminados: compras y gastos
 // }
-// session = { id, kind:'shopping', country, created_at, finished_at, total, items:[ <item> ] }
-// item    = { id, name, unit_price, quantity, subtotal, added_at,
-//             source:'voice'|'manual', parser?:'regex'|'llm'|'manual', transcript? }
+// registro = { id, kind:'shopping'|'expense', country, created_at, finished_at, total,
+//              name: string|null,          // null = nombre por defecto (ver recordName)
+//              category_id: string|null,   // null = sin categoría
+//              items: [ <item> ] }
+//   · kind:'shopping' → una compra con varios productos (se cierra con "Finalizar")
+//   · kind:'expense'  → un gasto suelto: un registro por ítem dictado, con un solo item
+// item     = { id, name, unit_price, quantity, subtotal, added_at, batch_id?,
+//              source:'voice'|'manual', parser?:'regex'|'llm'|'manual', transcript? }
+//   batch_id agrupa lo que salió de un mismo audio (sirve para "Deshacer").
 //
-// Pensado para crecer: un módulo nuevo (gastos, cuentas, presupuestos…) agrega su
-// propia colección al mismo objeto (db.expenses, db.accounts…) y se registra en
-// MODULES, sin tocar `sessions` ni las pantallas existentes.
+// Pensado para crecer: un módulo nuevo (presupuestos, cuentas…) agrega su propia colección
+// al mismo objeto y se registra en MODULES, sin tocar `sessions` ni las pantallas existentes.
+// Si más adelante conviene un libro de movimientos único, cada registro ya trae
+// fecha, monto, moneda, categoría y origen para migrarlo.
 const DB_KEY = 'carrito_v1';   // se mantiene para no perder los datos ya guardados
-const DB_VERSION = 3;
+const DB_VERSION = 4;
+
+// Categorías iniciales (se pueden renombrar, recolorear o borrar en la sección Categorías)
+const DEFAULT_CATEGORIES = [
+  ['Supermercado', '#2ECC71'], ['Comida', '#E67E22'], ['Transporte', '#3498DB'],
+  ['Hogar', '#9B59B6'], ['Salud', '#E74C3C'], ['Ocio', '#F1C40F'],
+];
+const CATEGORY_COLORS = ['#E74C3C', '#E67E22', '#F1C40F', '#2ECC71', '#1ABC9C', '#3498DB', '#9B59B6', '#8A8A8A'];
+
+function seedCategories() {
+  const now = new Date().toISOString();
+  return DEFAULT_CATEGORIES.map(([name, color]) => ({ id: uuid(), name, color, created_at: now }));
+}
 
 function defaultDB() {
-  return { version: DB_VERSION, settings: { country: 'AR', decimal_sep: 'comma' }, active_session: null, sessions: [] };
+  return {
+    version: DB_VERSION,
+    settings: { country: 'AR', decimal_sep: 'comma' },
+    categories: seedCategories(),
+    active_session: null,
+    sessions: []
+  };
 }
 
 function migrateDB(d) {
   if (!d || typeof d !== 'object') return defaultDB();
   d.settings = d.settings || { country: 'AR', decimal_sep: 'comma' };
   d.sessions = Array.isArray(d.sessions) ? d.sessions : [];
-  if ((d.version || 1) < 3) {
+  const from = d.version || 1;
+
+  if (from < 3) {
     // v3: cada compra recuerda su país/moneda, y hay carrito en curso persistente
     d.sessions.forEach(s => {
       s.kind = s.kind || 'shopping';
       s.country = s.country || d.settings.country || 'AR';
     });
   }
+  // v4: categorías + nombre/categoría opcionales en cada registro
+  if (!Array.isArray(d.categories)) d.categories = seedCategories();
+  const normalize = r => {
+    if (!r) return;
+    if (!('name' in r)) r.name = null;
+    if (!('category_id' in r)) r.category_id = null;
+  };
+  d.sessions.forEach(normalize);
+  normalize(d.active_session);
+
   d.active_session = d.active_session || null;
   d.version = DB_VERSION;
   return d;
@@ -967,7 +1198,7 @@ let currentSession = (db.active_session && db.active_session.items?.length) ? db
 let pending = [];            // dictados en proceso o con error (solo en memoria)
 const freshIds = new Set();  // filas recién agregadas (para animarlas una sola vez)
 let currentQty = 1;
-let qtyContext = null;       // { pendingId } cuando se completa a mano un dictado con error
+let qtyContext = null;       // { target, returnTo, pendingId } al cargar/completar a mano
 let editingItemId = null;
 let currentScreen = 'home';
 
@@ -977,7 +1208,7 @@ function getLocale(country) {
   return { country: c, ...(COUNTRY_LOCALES[c] || COUNTRY_LOCALES.AR) };
 }
 
-// `country` opcional: las compras guardadas se muestran con SU moneda, no la actual.
+// `country` opcional: los registros guardados se muestran con SU moneda, no la actual.
 function formatPrice(n, country) {
   const loc = getLocale(country);
   if (n == null || isNaN(n)) return loc.symbol + '0';
@@ -1005,6 +1236,8 @@ const ICONS = {
   plus:     '<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>',
   chevron:  '<polyline points="9 18 15 12 9 6"/>',
   retry:    '<polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/>',
+  tag:      '<path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/>',
+  card:     '<rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/>',
   trash:    '<polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6M9 6V4h6v2"/>',
 };
 function svg(name, size = 20) {
@@ -1016,6 +1249,7 @@ function svg(name, size = 20) {
 const NAV_ITEMS = [
   { screen: 'home',     label: 'Inicio',        icon: 'home' },
   { screen: 'history',  label: 'Historial',     icon: 'history' },
+  { screen: 'categories', label: 'Categorías',   icon: 'tag' },
   { screen: 'settings', label: 'Configuración', icon: 'settings' },
   { screen: 'account',  label: 'Mi Cuenta',     icon: 'user' },
   { screen: 'logs',     label: 'Logs',          icon: 'logs', badgeId: 'logs-error-badge' },
@@ -1050,21 +1284,30 @@ function navTo(screen) {
 const SCREEN_HOOKS = {
   home: renderHome,
   shop: renderShop,
+  expense: renderExpenses,
+  categories: renderCategories,
   history: renderHistory,
   settings: renderSettings,
   account: renderAccount,
   logs: renderLogs,
 };
 
+// Pantallas que tienen micrófono (comparten los controles de voz, el aviso y el "Deshacer")
+const VOICE_SCREENS = ['shop', 'expense'];
+
 function showScreen(id) {
-  if (id !== 'shop' && recState !== 'idle') cancelRecording();   // no dejar el micrófono abierto
+  if (!VOICE_SCREENS.includes(id)) {
+    if (recState !== 'idle') cancelRecording();   // no dejar el micrófono abierto
+    hideSnack();
+  }
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.getElementById(id).classList.add('active');
+  document.body.dataset.screen = id;               // el CSS usa esto para mostrar los controles de voz
   currentScreen = id;
   window.scrollTo(0, 0);
   SCREEN_HOOKS[id]?.();
 }
-function goBack() { showScreen('shop'); }
+function goBack() { showScreen(qtyContext?.returnTo || 'shop'); }
 
 // ── MÓDULOS ──
 // Un módulo aporta tarjetas al Inicio. Hoy hay uno (Compra). Para sumar
@@ -1091,7 +1334,18 @@ const shoppingModule = {
     }];
   },
 };
-const MODULES = [shoppingModule];
+const expenseModule = {
+  id: 'expense',
+  cards() {
+    return [{
+      icon: 'card',
+      title: 'Registrar gasto',
+      desc: 'Decí el gasto y el monto. Sin carrito.',
+      onClick: () => showScreen('expense'),
+    }];
+  },
+};
+const MODULES = [shoppingModule, expenseModule];
 
 // ── HOME ──
 function renderHome() {
@@ -1258,10 +1512,96 @@ function parseVoiceText(rawText) {
   return { ok: true, name: cleanProductName(text.slice(0, s) + ' ' + text.slice(e)), unit_price: pick.value, quantity: 1 };
 }
 
+// PROTOTIPO — parseVoiceItems: varios "producto + precio" en un dictado.
+// Regla: el PRECIO termina cada producto ("papa 1240, lechuga 3400, azúcar 1 kilo 1250").
+// Ante cualquier duda devuelve ok:false → el flujo pasa a Flash-Lite (que devuelve una lista).
+
+// Números dichos con palabras (decenas/centenas/mil): si aparecen junto a dígitos, el regex no puede agrupar bien.
+const NUMBER_WORDS = /\b(?:diez|once|doce|trece|catorce|quince|veinte\w*|treinta|cuarenta|cincuenta|sesenta|setenta|ochenta|noventa|cien|ciento|doscientos|trescientos|cuatrocientos|quinientos|seiscientos|setecientos|ochocientos|novecientos|mil|mill[oó]n|millones)\b/i;
+
+function splitQty(segment) {
+  // "3 yogures a" / "2 x" → cantidad explícita
+  const m = segment.match(/^(\d{1,2})\s+(.+?)\s+(?:a|x|c\/u)$/i);
+  if (m && !MEASURE_UNITS.has(m[2].split(' ')[0].toLowerCase())) return { name: m[2], quantity: parseInt(m[1], 10) };
+  return { name: segment, quantity: 1 };
+}
+
+function parseVoiceItems(rawText) {
+  const sep = db.settings?.decimal_sep || 'comma';
+  const decChar = sep === 'comma' ? ',' : '.';
+  let text = String(rawText || '').replace(/[\u00a0\u202f]/g, ' ').replace(/\s+/g, ' ').trim();
+  if (!text) return { ok: false, reason: 'vacio' };
+  text = text.replace(/(\d{3,})\s+con\s+(\d{1,2})(?!\d)/gi, (_, a, b) => a + decChar + b);
+
+  // Candidatos numéricos (mismas reglas que parseVoiceText)
+  const cands = [];
+  const re = new RegExp(NUM_RE_SRC, 'g'); let m;
+  while ((m = re.exec(text))) {
+    const start = m.index, end = start + m[0].length;
+    const prevCh = text[start - 1] || '';
+    if (/[a-záéíóúüñ0-9]/i.test(prevCh)) continue;
+    const before = text.slice(0, start), after = text.slice(end);
+    const nextWord = ((after.match(/^\s*([a-záéíóúüñ]+|%|\/)/i) || [])[1] || '').toLowerCase();
+    if (nextWord === '%' || nextWord === '/' || prevCh === '/') continue;
+    if (MEASURE_UNITS.has(nextWord)) continue;
+    const value = parseNumberToken(m[0], sep);
+    if (value == null) continue;
+    const prevWord = ((before.match(/([a-záéíóúüñ]+)\s*\$?\s*$/i) || [])[1] || '').toLowerCase();
+    const strong = /\$\s*$/.test(before) || new RegExp('^\\s*' + CURRENCY_WORD, 'i').test(after);
+    if (!strong && prevWord === 'x' && Number.isInteger(value) && value <= 48) continue;
+    // Enteros chicos (<100) = cantidad/atributo, salvo que cierren un producto ("chicle 50, papa 1240")
+    const closesItem = /^\s*[,;.]\s*[a-záéíóúüñ]/i.test(after);
+    const isPrice = strong || !Number.isInteger(value) || value >= 100 || closesItem;
+    cands.push({ start, end, value, strong, isPrice });
+  }
+  const prices = cands.filter(c => c.isPrice);
+  if (prices.length < 2) {
+    // 0 o 1 precio → lo resuelve parseVoiceText, salvo que después del precio venga OTRA palabra
+    // ("papa 1240, lechuga"): probablemente un producto sin precio → mejor preguntarle a Flash-Lite.
+    const one = prices.length === 1 ? prices[0] : (cands.length === 1 ? cands[0] : null);
+    if (one) {
+      let tail = text.slice(one.end).replace(new RegExp('^\\s*' + CURRENCY_WORD, 'i'), '');
+      tail = tail.replace(/[\s.,;:!?¡¿-]+/g, ' ').trim();
+      const okTail = tail === '' || /^(?:(?:el|la|por|x|cada)\s+(?:kilo|kg|litro|l|unidad|uno|una|paquete|pack|docena)|c\/u)$/i.test(tail);
+      if (!okTail) return { ok: false, reason: 'producto_sin_precio' };
+    }
+    return { ok: false, reason: 'no_multi' };
+  }
+  if (NUMBER_WORDS.test(text)) return { ok: false, reason: 'numeros_en_palabras' };
+
+  const items = [];
+  let cursor = 0;
+  for (const c of prices) {
+    if (c.value <= 0 || c.value >= 1e9) return { ok: false, reason: 'rango' };
+    let seg = text.slice(cursor, c.start).replace(/\$\s*$/, '');
+    seg = seg.replace(/^[\s.,;:!?¡¿-]+/, '').replace(/^(?:y|e|después|luego|también|más)\s+/i, '');
+    if (!/[a-záéíóúüñ]/i.test(seg)) return { ok: false, reason: 'precio_sin_nombre' };   // ej. "1240 papa, 3400 lechuga"
+    const { name, quantity } = splitQty(seg.replace(/[\s.,;:!?¡¿-]+$/, ''));
+    const clean = cleanProductName(name);
+    if (!clean || clean.split(' ').length > 8) return { ok: false, reason: 'nombre_dudoso' };
+    items.push({ name: clean, unit_price: c.value, quantity });
+    cursor = c.end;
+    const post = text.slice(cursor).match(new RegExp('^\\s*' + CURRENCY_WORD, 'i'));
+    if (post) cursor += post[0].length;
+  }
+  const rest = text.slice(cursor).replace(/[\s.,;:!?¡¿-]+/g, ' ').trim();
+  if (/[a-záéíóúüñ]/i.test(rest.replace(/^(?:c\/u|cada\s+(?:uno|una))$/i, ''))) return { ok: false, reason: 'producto_sin_precio' };
+  return { ok: true, items };
+}
+
+// Punto de entrada único que usaría el cliente: siempre devuelve una lista de ítems o ok:false.
+function parseDictation(text) {
+  const multi = parseVoiceItems(text);
+  if (multi.ok) return multi;
+  if (multi.reason !== 'no_multi') return multi;      // ambiguo → Flash-Lite
+  const one = parseVoiceText(text);
+  return one.ok ? { ok: true, items: [{ name: one.name, unit_price: one.unit_price, quantity: one.quantity }] } : one;
+}
+
 // ── VOZ · GRABACIÓN ──
 // Toque para empezar, toque para enviar. El micrófono se libera después de cada
 // dictado (no queda abierto durante toda la compra).
-const VOICE_MAX_MS = 15000;
+const VOICE_MAX_MS = 45000;   // alcanza para 5-6 productos en un audio (WAV 16 kHz ≈ 1,4 MB)
 const VOICE_MIN_MS = 600;
 let recState = 'idle';   // idle | starting | recording | stopping
 let recorder = null, recStream = null, recChunks = [], recStart = 0;
@@ -1281,7 +1621,7 @@ function toggleRecording() {
 async function startRecording() {
   if (recState === 'starting') { toast('Esperando el permiso del micrófono…'); return; }
   if (recState !== 'idle') return;
-  if (!currentSession) newSession();
+  if (currentScreen === 'shop' && !currentSession) newSession();
   hideMicHelp();
 
   // Requisitos del navegador: contexto seguro (HTTPS/localhost), getUserMedia y MediaRecorder
@@ -1324,7 +1664,7 @@ async function startRecording() {
   setRecordingUI(true);
   updateRecTime();
   recTick = setInterval(updateRecTime, 250);
-  recAutoStop = setTimeout(() => { toast('Máximo 15 segundos'); stopRecording(); }, VOICE_MAX_MS);
+  recAutoStop = setTimeout(() => { toast('Máximo 45 segundos'); stopRecording(); }, VOICE_MAX_MS);
   navigator.vibrate?.(20);
   log('info', 'Grabando', { mime: recorder.mimeType });
 }
@@ -1530,9 +1870,11 @@ async function apiPost(path, payload, timeoutMs = 25000) {
 }
 
 function enqueueClip(blob, mime, durMs) {
-  if (!currentSession) return;
+  // El destino lo define la pantalla desde la que se grabó: carrito de compra o registro de gastos
+  const target = currentScreen === 'expense' ? 'expense' : 'shopping';
+  if (target === 'shopping' && !currentSession) return;
   const p = {
-    id: uuid(), sessionId: currentSession.id,
+    id: uuid(), target, sessionId: target === 'shopping' ? currentSession.id : null,
     status: 'pending', stage: 'transcribing',
     blob, mime, audio: null,
     transcript: null, error: null, retryable: false,
@@ -1540,19 +1882,22 @@ function enqueueClip(blob, mime, durMs) {
   };
   pending.unshift(p);
   freshIds.add(p.id);
-  log('info', 'Audio grabado', { duration_ms: p.rec_ms, mime, size_kb: Math.round(blob.size / 1024) });
-  renderShop();
+  log('info', 'Audio grabado', { target, duration_ms: p.rec_ms, mime, size_kb: Math.round(blob.size / 1024) });
+  renderTarget(p);
   runPipeline(p);
 }
 
-const stillActive = p => pending.includes(p) && currentSession?.id === p.sessionId;
+// Redibuja la pantalla a la que pertenece el dictado
+function renderTarget(p) { if (p.target === 'expense') renderExpenses(); else renderShop(); }
+
+const stillActive = p => pending.includes(p) && (p.target === 'expense' || currentSession?.id === p.sessionId);
 
 async function runPipeline(p) {
-  const loc = getLocale(currentSession?.country);
+  const loc = getLocale(p.target === 'shopping' ? currentSession?.country : undefined);
   const apiLoc = { country: loc.country, currency: loc.currency, symbol: loc.symbol };
   const timings = { rec_ms: p.rec_ms };
   p.status = 'pending'; p.stage = p.transcript ? 'parsing' : 'transcribing'; p.error = null;
-  renderShop();
+  renderTarget(p);
 
   try {
     // 1) Transcripción (Gemini 3.5 Transcribe · SMART, con fallback a Flash-Lite en el servidor)
@@ -1580,37 +1925,32 @@ async function runPipeline(p) {
     }
     if (!p.transcript) throw pipelineError('empty', 'No se escuchó nada. Probá de nuevo.', false);
 
-    // 2) Regex local (instantáneo)
-    p.stage = 'parsing'; renderShop();
+    // 2) Regex local (instantáneo): uno o varios "producto + precio"
+    p.stage = 'parsing'; renderTarget(p);
     let t = performance.now();
-    let parsed = parseVoiceText(p.transcript);
+    let parsed = parseDictation(p.transcript);
     timings.parse_ms = Math.round(performance.now() - t);
     let parser = 'regex';
+    let unpriced = [];
 
-    // 3) Fallback: Flash-Lite solo para estructurar el texto
+    // 3) Fallback: Flash-Lite estructura el texto y devuelve una lista
     if (!parsed.ok) {
       log('info', 'El regex no alcanzó — se consulta a Flash-Lite', { reason: parsed.reason, text: p.transcript });
-      p.stage = 'structuring'; renderShop();
+      p.stage = 'structuring'; renderTarget(p);
       t = performance.now();
       const ex = await apiPost('/api/extract', { text: p.transcript, loc: apiLoc });
       timings.llm_ms = Math.round(performance.now() - t);
       if (!stillActive(p)) return;
-      if (!(ex.unit_price > 0)) throw pipelineError('no_price', 'No se detectó un precio.', false);
-      parsed = { ok: true, name: ex.name, unit_price: ex.unit_price, quantity: ex.quantity || 1 };
+      const list = Array.isArray(ex.items) ? ex.items : [];
+      const priced = list.filter(i => i.unit_price > 0);
+      unpriced = list.filter(i => !(i.unit_price > 0) && i.name).map(i => i.name);
+      if (!priced.length) throw pipelineError('no_price', 'No se detectó un precio.', false);
+      parsed = { ok: true, items: priced };
       parser = 'llm';
     }
 
     if (!stillActive(p)) return;
-    pending = pending.filter(x => x !== p);
-    const item = addItem({
-      name: parsed.name, unit_price: parsed.unit_price, quantity: parsed.quantity,
-      source: 'voice', parser, transcript: p.transcript,
-    });
-    timings.total_ms = Math.round(performance.now() - p.t0);   // desde que se envió el audio
-    log('ok', `${parser === 'regex' ? 'Regex' : 'Flash-Lite'} · ${item.name} · ${formatPrice(item.unit_price, currentSession.country)}`, {
-      transcript: p.transcript, parser, name: item.name, unit_price: item.unit_price, quantity: item.quantity, timings,
-    });
-    toast(`${item.name} · ${formatPrice(item.unit_price, currentSession.country)} ✓`);
+    commitDictation(p, parsed.items, parser, unpriced, timings);
 
   } catch (e) {
     if (!pending.includes(p)) return;
@@ -1618,8 +1958,62 @@ async function runPipeline(p) {
     log(e.retryable ? 'warn' : 'error', `Dictado no procesado (${e.step || 'error'}): ${e.message}`, {
       step: e.step, transcript: p.transcript, level: p.level, timings, server: e.data || p.serverDebug,
     });
-    renderShop();
+    renderTarget(p);
   }
+}
+
+// Convierte lo dictado en ítems del carrito o en gastos (uno por ítem) y avisa con "Deshacer"
+function commitDictation(p, items, parser, unpriced, timings) {
+  pending = pending.filter(x => x !== p);
+  const common = { source: 'voice', parser, transcript: p.transcript, batch_id: p.id };
+  const isExpense = p.target === 'expense';
+  const country = isExpense ? db.settings.country : currentSession.country;
+
+  let created;
+  if (isExpense) {
+    created = items.map(i => createExpenseRecord({ ...i, ...common }));
+  } else {
+    created = items.map(i => addItem({ ...i, ...common }, { commit: false }));
+    commitCart();
+  }
+  // Productos que se mencionaron sin precio → filas para completar a mano
+  unpriced.forEach(name => {
+    const row = { id: uuid(), target: p.target, sessionId: p.sessionId, status: 'error', stage: null, transcript: name, error: 'Sin precio', retryable: false };
+    pending.unshift(row);
+    freshIds.add(row.id);
+  });
+  renderTarget(p);
+
+  const n = created.length;
+  const sum = created.reduce((s, x) => s + (x.subtotal ?? x.total), 0);
+  const first = isExpense ? created[0].items[0] : created[0];
+  const label = isExpense ? (n === 1 ? 'gasto' : 'gastos') : (n === 1 ? 'producto' : 'productos');
+  timings.total_ms = Math.round(performance.now() - p.t0);   // desde que se envió el audio
+  log('ok', `${parser === 'regex' ? 'Regex' : 'Flash-Lite'} · ${n} ${label} · ${formatPrice(sum, country)}`, {
+    transcript: p.transcript, parser, target: p.target, unpriced,
+    items: items.map(i => ({ name: i.name, unit_price: i.unit_price, quantity: i.quantity })), timings,
+  });
+
+  const text = (n === 1 ? `${first.name} · ${formatPrice(sum, country)}` : `${n} ${label} · ${formatPrice(sum, country)}`)
+             + (unpriced.length ? ` · ${unpriced.length} sin precio` : '');
+  const actions = [];
+  if (isExpense && n === 1) actions.push({ label: 'Categorizar', onClick: () => openRecordSheet(created[0].id) });
+  actions.push({ label: 'Deshacer', onClick: () => undoBatch(p.id, p.target) });
+  showSnack(text, actions);
+}
+
+// Quita todo lo que salió de un mismo audio
+function undoBatch(batchId, target) {
+  if (target === 'expense') {
+    db.sessions = db.sessions.filter(r => !(r.kind === 'expense' && r.items[0]?.batch_id === batchId));
+    saveDB();
+    renderExpenses();
+  } else if (currentSession) {
+    currentSession.items = currentSession.items.filter(i => i.batch_id !== batchId);
+    commitCart();
+  }
+  hideSnack();
+  toast('Deshecho');
 }
 
 function retryClip(id) {
@@ -1630,15 +2024,17 @@ function retryClip(id) {
 }
 
 function removePending(id) {
+  const p = pending.find(x => x.id === id);
   pending = pending.filter(x => x.id !== id);
-  renderShop();
+  if (p) renderTarget(p);
 }
 
 // Tocar un dictado con error → completarlo a mano (nombre precargado con lo que se entendió)
 function completePending(id) {
   const p = pending.find(x => x.id === id);
   if (!p || p.status !== 'error') return;
-  openQtyScreen({ name: p.transcript || '', unit_price: null }, { pendingId: id });
+  openQtyScreen({ name: p.transcript || '', unit_price: null },
+    { pendingId: id, target: p.target, returnTo: p.target === 'expense' ? 'expense' : 'shop' });
 }
 
 // ── MÓDULO COMPRA · INICIO ──
@@ -1661,10 +2057,12 @@ function newSession() {
     country: db.settings.country,   // la compra conserva su moneda aunque cambies el país después
     created_at: new Date().toISOString(),
     finished_at: null,
+    name: null,                     // null = nombre por defecto (fecha y hora)
+    category_id: null,              // null = sin categoría
     items: [],
     total: 0
   };
-  pending = [];
+  pending = pending.filter(p => p.target !== 'shopping');   // los dictados de gastos no dependen del carrito
   persistActive();
   renderShop();
 }
@@ -1682,7 +2080,8 @@ function commitCart() {
   renderShop();
 }
 
-function addItem({ name, unit_price, quantity = 1, source, parser, transcript }) {
+// { commit:false } permite agregar varios ítems de un mismo audio y guardar/redibujar una sola vez
+function addItem({ name, unit_price, quantity = 1, source, parser, transcript, batch_id }, { commit = true } = {}) {
   const q = Math.max(1, parseInt(quantity, 10) || 1);
   const item = {
     id: uuid(),
@@ -1695,9 +2094,10 @@ function addItem({ name, unit_price, quantity = 1, source, parser, transcript })
   };
   if (parser) item.parser = parser;
   if (transcript) item.transcript = transcript;
+  if (batch_id) item.batch_id = batch_id;
   currentSession.items.push(item);
   freshIds.add(item.id);
-  commitCart();
+  if (commit) commitCart();
   return item;
 }
 
@@ -1708,16 +2108,28 @@ function removeItem(id) {
 }
 
 // ── CARGA MANUAL / CONFIRMAR (pantalla con campos editables) ──
+// Sirve para el carrito (nombre + precio + cantidad) y para gastos (descripción + monto).
 function openManualEntry() {
-  openQtyScreen({ name: '', unit_price: null }, {});
+  const target = currentScreen === 'expense' ? 'expense' : 'shopping';
+  openQtyScreen({ name: '', unit_price: null }, { target, returnTo: target === 'expense' ? 'expense' : 'shop' });
 }
 
+const qtyCountry = () => (qtyContext?.target === 'expense' ? db.settings.country : currentSession?.country);
+
 function openQtyScreen(product, ctx = {}) {
-  qtyContext = ctx;
+  qtyContext = { target: 'shopping', returnTo: 'shop', ...ctx };
+  const isExpense = qtyContext.target === 'expense';
   currentQty = product.quantity || 1;
+  document.getElementById('qty-name-label').textContent = isExpense ? 'Descripción' : 'Nombre del producto';
+  document.getElementById('qty-price-label').textContent = isExpense ? 'Monto' : 'Precio unitario';
+  document.getElementById('qty-product-name').placeholder = isExpense ? 'Ej: Nafta' : 'Nombre del producto';
   document.getElementById('qty-product-name').value = product.name || '';
   document.getElementById('qty-unit-price-input').value = product.unit_price != null ? product.unit_price : '';
-  document.getElementById('qty-add-btn').textContent = 'Agregar al carrito';
+  // Un gasto es un solo monto: sin cantidad ni subtotal
+  document.getElementById('qty-divider').style.display = isExpense ? 'none' : '';
+  document.getElementById('qty-block').style.display = isExpense ? 'none' : '';
+  document.querySelector('#qty-screen .qty-subtotal').style.display = isExpense ? 'none' : '';
+  document.getElementById('qty-add-btn').textContent = isExpense ? 'Guardar gasto' : 'Agregar al carrito';
   updateQtyDisplay();
   showScreen('qty-screen');
   if (!product.name) setTimeout(() => document.getElementById('qty-product-name').focus(), 60);
@@ -1731,32 +2143,41 @@ function changeQty(delta) {
 function updateQtyDisplay() {
   document.getElementById('qty-number').textContent = currentQty;
   const price = parseFloat(document.getElementById('qty-unit-price-input').value) || 0;
-  document.getElementById('qty-subtotal').textContent = formatPrice(price * currentQty, currentSession?.country);
+  document.getElementById('qty-subtotal').textContent = formatPrice(price * currentQty, qtyCountry());
 }
 
 // Live update subtotal when price field changes
 document.getElementById('qty-unit-price-input').addEventListener('input', updateQtyDisplay);
 
 function addToCart() {
-  const name = document.getElementById('qty-product-name').value.trim() || 'Producto';
+  const ctx = qtyContext || { target: 'shopping', returnTo: 'shop' };
+  const isExpense = ctx.target === 'expense';
+  const name = document.getElementById('qty-product-name').value.trim() || (isExpense ? 'Gasto' : 'Producto');
   const unit_price = parseFloat(document.getElementById('qty-unit-price-input').value);
 
-  if (!unit_price || unit_price <= 0) { toast('Ingresá un precio válido'); return; }
-  if (!currentSession) return;
+  if (!unit_price || unit_price <= 0) { toast('Ingresá un monto válido'); return; }
+  if (!isExpense && !currentSession) return;
 
-  // Si venía de un dictado con error, ese dictado se reemplaza por el producto completado
-  const fromPending = qtyContext?.pendingId ? pending.find(x => x.id === qtyContext.pendingId) : null;
+  // Si venía de un dictado con error, ese dictado se reemplaza por lo completado
+  const fromPending = ctx.pendingId ? pending.find(x => x.id === ctx.pendingId) : null;
   if (fromPending) pending = pending.filter(x => x !== fromPending);
   qtyContext = null;
 
-  addItem({
-    name, unit_price, quantity: currentQty,
+  const fields = {
+    name, unit_price, quantity: isExpense ? 1 : currentQty,
     source: fromPending ? 'voice' : 'manual',
     parser: fromPending ? 'manual' : undefined,
     transcript: fromPending?.transcript
-  });
-  showScreen('shop');
-  toast('Agregado ✓');
+  };
+  if (isExpense) {
+    const rec = createExpenseRecord(fields);
+    showScreen('expense');
+    showSnack(`${name} · ${formatPrice(rec.total, rec.country)}`, [{ label: 'Categorizar', onClick: () => openRecordSheet(rec.id) }]);
+  } else {
+    addItem(fields);
+    showScreen('shop');
+    toast('Agregado ✓');
+  }
 }
 
 // ── SHOP ──
@@ -1779,6 +2200,7 @@ function itemRowHtml(item, country) {
     </div>`;
 }
 
+// Fila de un dictado en proceso o con error (la usan el carrito y la pantalla de gastos)
 function pendingRowHtml(p) {
   const fresh = freshIds.has(p.id) ? ' enter' : '';
   if (p.status === 'error') {
@@ -1809,23 +2231,25 @@ function renderShop() {
   const items = currentSession?.items || [];
   const count = items.length;
   const country = currentSession?.country;
-  const busy = pending.filter(p => p.status === 'pending').length;
+  const rows = pending.filter(p => p.target === 'shopping');
+  const busy = rows.filter(p => p.status === 'pending').length;
 
   document.getElementById('item-count').textContent = `${count} producto${count !== 1 ? 's' : ''}`;
   document.getElementById('total-display').textContent = formatPrice(currentSession?.total || 0, country);
   document.getElementById('finish-btn').disabled = count === 0 || busy > 0;
 
-  if (count === 0 && pending.length === 0) {
+  if (count === 0 && rows.length === 0) {
     list.innerHTML = `<div class="empty-state">
       <p>Tocá el micrófono y decí el producto<br>y el precio.</p>
       <p class="empty-example">«Azúcar 1 kilo 1250»</p>
+      <p class="empty-tip">Podés decir varios seguidos:<br>«Papa 1240, lechuga 3400»</p>
       <span class="arrow">↓</span></div>`;
     return;
   }
 
   // Lo último que se agregó va arriba, junto al total
-  list.innerHTML = pending.map(pendingRowHtml).join('') +
-                   [...items].reverse().map(i => itemRowHtml(i, country)).join('');
+  list.innerHTML = rows.map(pendingRowHtml).join('') +
+                   newestFirst(items, i => i.batch_id || i.id, i => i.added_at).map(i => itemRowHtml(i, country)).join('');
   freshIds.clear();
 }
 
@@ -1864,10 +2288,12 @@ function saveEditedItem() {
   toast('Producto actualizado ✓');
 }
 
-// ── SUMMARY ──
+// ── SUMMARY (al finalizar la compra: nombre y categoría opcionales) ──
+let summaryRecordId = null;
+
 function showSummary() {
   if (!currentSession || currentSession.items.length === 0) return;
-  const failed = pending.filter(p => p.status === 'error').length;
+  const failed = pending.filter(p => p.target === 'shopping' && p.status === 'error').length;
   if (failed && !confirm(`Hay ${failed} dictado${failed !== 1 ? 's' : ''} sin precio que no se van a sumar. ¿Finalizar igual?`)) return;
 
   const done = currentSession;
@@ -1876,12 +2302,22 @@ function showSummary() {
   db.active_session = null;
   saveDB();
   currentSession = null;
-  pending = [];
+  pending = pending.filter(p => p.target !== 'shopping');
+  summaryRecordId = done.id;
 
   document.getElementById('summary-total').textContent = formatPrice(done.total, done.country);
   document.getElementById('summary-date').textContent = formatDate(done.finished_at);
+  document.getElementById('summary-name').value = '';
+  document.getElementById('summary-name').placeholder = defaultRecordName(done);   // así se llama si no la renombrás
+  renderCatPicker('summary-cats', done.category_id, 'summary');
   document.getElementById('summary-items').innerHTML = renderItemList(done.items, done.country);
   showScreen('summary');
+}
+
+// Se guarda solo, sin botón: lo que escribas queda en el registro
+function onSummaryName() {
+  const v = document.getElementById('summary-name').value.trim();
+  updateRecord(summaryRecordId, { name: v || null });
 }
 
 function newShopping() {
@@ -1899,6 +2335,417 @@ function renderItemList(items, country) {
     </div>
   `).join('');
 }
+
+// ── REGISTROS (compras y gastos) ──
+const findRecord = id => (db.sessions || []).find(r => r.id === id) || null;
+const categoryById = id => (db.categories || []).find(c => c.id === id) || null;
+
+// Nombre por defecto: la fecha y hora de la compra; un gasto se llama como lo dictado ("Nafta").
+function defaultRecordName(rec) {
+  if (rec.kind === 'expense' && rec.items?.length === 1) return rec.items[0].name;
+  return formatDate(rec.finished_at || rec.created_at);
+}
+const recordName = rec => (rec.name && rec.name.trim()) || defaultRecordName(rec);
+
+// Un gasto = un registro con un solo ítem (un registro por ítem dictado)
+function createExpenseRecord({ name, unit_price, quantity = 1, source, parser, transcript, batch_id }) {
+  const q = Math.max(1, parseInt(quantity, 10) || 1);
+  const now = new Date().toISOString();
+  const item = {
+    id: uuid(),
+    name: String(name || '').trim() || 'Gasto',
+    unit_price,
+    quantity: q,
+    subtotal: parseFloat((unit_price * q).toFixed(2)),
+    added_at: now,
+    source
+  };
+  if (parser) item.parser = parser;
+  if (transcript) item.transcript = transcript;
+  if (batch_id) item.batch_id = batch_id;
+  const rec = {
+    id: uuid(), kind: 'expense', country: db.settings.country,
+    created_at: now, finished_at: now,
+    name: null, category_id: null,
+    items: [item], total: item.subtotal
+  };
+  db.sessions.push(rec);
+  saveDB();
+  freshIds.add(rec.id);
+  return rec;
+}
+
+function updateRecord(id, patch) {
+  const r = findRecord(id);
+  if (!r) return null;
+  Object.assign(r, patch);
+  saveDB();
+  return r;
+}
+
+// Redibuja lo que esté a la vista después de cambiar un registro o una categoría
+function refreshViews() {
+  if (currentScreen === 'expense') renderExpenses();
+  else if (currentScreen === 'history') renderHistory();
+  else if (currentScreen === 'categories') renderCategories();
+  if (hdRecordId && document.getElementById('history-detail').classList.contains('open')) renderHistoryDetail();
+}
+
+// Lo más nuevo primero, pero lo que salió de un mismo audio conserva el orden en que se dictó
+function newestFirst(list, keyFn, timeFn) {
+  const groups = new Map();
+  list.forEach(x => {
+    const k = keyFn(x);
+    if (!groups.has(k)) groups.set(k, []);
+    groups.get(k).push(x);
+  });
+  const last = g => timeFn(g[g.length - 1]);
+  return [...groups.values()]
+    .sort((a, b) => (last(b) > last(a) ? 1 : last(b) < last(a) ? -1 : 0))
+    .flat();
+}
+const batchKey = r => r.items?.[0]?.batch_id || r.id;
+
+// ── AVISO CON ACCIONES ("3 productos · $5.890  Deshacer") ──
+let snackTimer = null;
+function showSnack(text, actions = []) {
+  const el = document.getElementById('snack');
+  document.getElementById('snack-text').textContent = text;
+  const box = document.getElementById('snack-actions');
+  box.innerHTML = '';
+  actions.forEach(a => {
+    const b = document.createElement('button');
+    b.textContent = a.label;
+    b.addEventListener('click', () => { hideSnack(); a.onClick(); });
+    box.appendChild(b);
+  });
+  document.getElementById('toast').classList.remove('show');   // no superponer con un toast
+  el.classList.add('show');
+  clearTimeout(snackTimer);
+  snackTimer = setTimeout(hideSnack, 8000);
+}
+function hideSnack() {
+  clearTimeout(snackTimer);
+  document.getElementById('snack')?.classList.remove('show');
+}
+
+// ── FECHAS ──
+const dayKey = d => { const x = new Date(d); return `${x.getFullYear()}-${x.getMonth()}-${x.getDate()}`; };
+function dayLabel(iso) {
+  const yesterday = new Date(); yesterday.setDate(yesterday.getDate() - 1);
+  if (dayKey(iso) === dayKey(new Date())) return 'Hoy';
+  if (dayKey(iso) === dayKey(yesterday)) return 'Ayer';
+  return new Date(iso).toLocaleDateString(getLocale().locale, { day: 'numeric', month: 'long' });
+}
+const timeLabel = iso => new Date(iso).toLocaleTimeString(getLocale().locale, { hour: '2-digit', minute: '2-digit' });
+
+// ── PANTALLA GASTOS ──
+function expenseRowHtml(r) {
+  const cat = categoryById(r.category_id);
+  return `
+    <div class="product-item${freshIds.has(r.id) ? ' enter' : ''}" onclick="openRecordSheet('${r.id}')">
+      <div class="product-qty"><span class="cat-dot" style="background:${cat ? cat.color : '#C9C9C4'}"></span></div>
+      <div class="product-info">
+        <div class="product-name">${esc(recordName(r))}</div>
+        <div class="product-unit">${esc(cat ? cat.name : 'Sin categoría')} · ${timeLabel(r.created_at)}</div>
+      </div>
+      <div class="product-price">${formatPrice(r.total, r.country)}</div>
+    </div>`;
+}
+
+function renderExpenses() {
+  const list = document.getElementById('expense-list');
+  if (!list) return;
+  const country = db.settings.country;
+  const all = newestFirst(db.sessions.filter(r => r.kind === 'expense'), batchKey, r => r.created_at);
+  const today = all.filter(r => dayKey(r.created_at) === dayKey(new Date()));
+  const todayTotal = today.filter(r => r.country === country).reduce((s, r) => s + r.total, 0);
+  document.getElementById('expense-today').textContent = formatPrice(todayTotal, country);
+  document.getElementById('expense-count').textContent = `${today.length} hoy`;
+
+  const rows = pending.filter(p => p.target === 'expense');
+  if (!all.length && !rows.length) {
+    list.innerHTML = `<div class="empty-state">
+      <p>Tocá el micrófono y decí el gasto<br>y el monto.</p>
+      <p class="empty-example">«Compra Super 34560»</p>
+      <p class="empty-tip">Cada gasto se guarda por separado:<br>«Nafta 20000, peaje 3500»</p>
+      <span class="arrow">↓</span></div>`;
+    return;
+  }
+  let html = rows.map(pendingRowHtml).join('');
+  let lastDay = null;
+  all.slice(0, 80).forEach(r => {
+    const k = dayKey(r.created_at);
+    if (k !== lastDay) { html += `<div class="day-header">${esc(dayLabel(r.created_at))}</div>`; lastDay = k; }
+    html += expenseRowHtml(r);
+  });
+  list.innerHTML = html;
+  freshIds.clear();
+}
+
+// ── SELECTOR DE CATEGORÍA (chips) ──
+const catPick = { summary: null, rec: null };
+const CAT_PICKER_BOX = { summary: 'summary-cats', rec: 'rec-cats' };
+
+function renderCatPicker(containerId, selectedId, ctx) {
+  const sel = categoryById(selectedId) ? selectedId : null;   // si la categoría ya no existe → sin categoría
+  catPick[ctx] = sel;
+  const box = document.getElementById(containerId);
+  if (!box) return;
+  const chip = (id, label, color) => `
+    <button type="button" class="cat-chip${id === sel ? ' selected' : ''}" onclick="pickCat('${ctx}', ${id ? `'${id}'` : 'null'})">
+      ${color ? `<span class="cat-dot" style="background:${color}"></span>` : ''}${esc(label)}
+    </button>`;
+  box.innerHTML = chip(null, 'Sin categoría', null) +
+    db.categories.map(c => chip(c.id, c.name, c.color)).join('') +
+    `<button type="button" class="cat-chip cat-chip-new" onclick="openCategorySheet(null, '${ctx}')">+ Nueva</button>`;
+}
+
+function pickCat(ctx, id) {
+  renderCatPicker(CAT_PICKER_BOX[ctx], id, ctx);
+  if (ctx === 'summary') updateRecord(summaryRecordId, { category_id: id });   // en el resumen se guarda solo
+}
+
+// ── HOJA: EDITAR REGISTRO (nombre, categoría y, en gastos, monto) ──
+let recSheetId = null;
+
+function openRecordSheet(id) {
+  const r = findRecord(id);
+  if (!r) return;
+  recSheetId = id;
+  const isExpense = r.kind === 'expense';
+  document.getElementById('rec-title').textContent = isExpense ? 'Editar gasto' : 'Editar compra';
+  const nameEl = document.getElementById('rec-name');
+  nameEl.value = r.name || '';
+  nameEl.placeholder = defaultRecordName(r);
+  document.getElementById('rec-amount-field').style.display = isExpense ? '' : 'none';
+  document.getElementById('rec-amount').value = isExpense ? r.total : '';
+  document.getElementById('rec-delete-btn').style.display = isExpense ? '' : 'none';
+  renderCatPicker('rec-cats', r.category_id, 'rec');
+  document.getElementById('rec-overlay').classList.add('open');
+}
+
+function closeRecordSheet() {
+  document.getElementById('rec-overlay').classList.remove('open');
+  recSheetId = null;
+}
+
+function saveRecordSheet() {
+  const r = findRecord(recSheetId);
+  if (!r) { closeRecordSheet(); return; }
+  if (r.kind === 'expense') {
+    const amount = parseFloat(document.getElementById('rec-amount').value);
+    if (!amount || amount <= 0) { toast('Ingresá un monto válido'); return; }
+    if (Math.abs(amount - r.total) > 0.005) {   // un gasto es un solo monto
+      const it = r.items[0];
+      it.quantity = 1; it.unit_price = amount; it.subtotal = amount;
+      r.total = amount;
+    }
+  }
+  r.name = document.getElementById('rec-name').value.trim() || null;   // vacío = nombre por defecto
+  r.category_id = catPick.rec || null;
+  saveDB();
+  closeRecordSheet();
+  refreshViews();
+  toast('Guardado ✓');
+}
+
+function deleteRecordFromSheet() {
+  const r = findRecord(recSheetId);
+  if (!r) return;
+  if (!confirm('¿Eliminar este gasto?')) return;
+  db.sessions = db.sessions.filter(x => x.id !== r.id);
+  saveDB();
+  closeRecordSheet();
+  refreshViews();
+  toast('Gasto eliminado');
+}
+
+// ── HOJA: CATEGORÍA (crear / editar / eliminar) ──
+let catSheetId = null, catSheetColor = CATEGORY_COLORS[0], catSheetReturn = null;
+
+function openCategorySheet(id, returnCtx) {
+  catSheetId = id || null;
+  catSheetReturn = returnCtx || null;
+  const c = id ? categoryById(id) : null;
+  catSheetColor = c ? c.color : CATEGORY_COLORS[db.categories.length % CATEGORY_COLORS.length];
+  document.getElementById('cat-title').textContent = c ? 'Editar categoría' : 'Nueva categoría';
+  document.getElementById('cat-name').value = c ? c.name : '';
+  document.getElementById('cat-delete-btn').style.display = c ? '' : 'none';
+  renderSwatches();
+  document.getElementById('cat-overlay').classList.add('open');
+  if (!c) setTimeout(() => document.getElementById('cat-name').focus(), 60);
+}
+
+function renderSwatches() {
+  document.getElementById('cat-swatches').innerHTML = CATEGORY_COLORS.map(col =>
+    `<button type="button" class="swatch${col === catSheetColor ? ' selected' : ''}" style="background:${col}" onclick="pickSwatch('${col}')" aria-label="Color ${col}"></button>`
+  ).join('');
+}
+function pickSwatch(col) { catSheetColor = col; renderSwatches(); }
+
+function closeCategorySheet() {
+  document.getElementById('cat-overlay').classList.remove('open');
+  catSheetId = null;
+}
+
+function saveCategorySheet() {
+  const name = document.getElementById('cat-name').value.trim().slice(0, 24);
+  if (!name) { toast('Escribí un nombre'); return; }
+  if (db.categories.some(c => c.id !== catSheetId && c.name.toLowerCase() === name.toLowerCase())) {
+    toast('Ya existe una categoría con ese nombre'); return;
+  }
+  let cat;
+  if (catSheetId) {
+    cat = categoryById(catSheetId);
+    cat.name = name; cat.color = catSheetColor;
+  } else {
+    cat = { id: uuid(), name, color: catSheetColor, created_at: new Date().toISOString() };
+    db.categories.push(cat);
+  }
+  saveDB();
+  const ret = catSheetReturn;
+  closeCategorySheet();
+  if (ret) pickCat(ret, cat.id);   // si se creó desde un selector, queda elegida
+  refreshViews();
+  toast('Categoría guardada ✓');
+}
+
+function deleteCategoryFromSheet() {
+  const c = categoryById(catSheetId);
+  if (!c) return;
+  const n = db.sessions.filter(r => r.category_id === c.id).length;
+  const msg = n
+    ? `${n} registro${n !== 1 ? 's' : ''} ${n !== 1 ? 'quedarán' : 'quedará'} sin categoría. ¿Eliminar "${c.name}"?`
+    : `¿Eliminar "${c.name}"?`;
+  if (!confirm(msg)) return;
+  db.sessions.forEach(r => { if (r.category_id === c.id) r.category_id = null; });
+  db.categories = db.categories.filter(x => x.id !== c.id);
+  saveDB();
+  closeCategorySheet();
+  refreshViews();
+}
+
+// ── PANTALLA CATEGORÍAS (gasto por categoría, por mes) ──
+let catMonthOffset = 0;   // 0 = este mes, -1 = el anterior…
+function shiftCatMonth(delta) {
+  catMonthOffset = Math.min(0, catMonthOffset + delta);   // no hay meses futuros
+  renderCategories();
+}
+
+function renderCategories() {
+  const list = document.getElementById('cat-list');
+  if (!list) return;
+  const country = db.settings.country;
+  const now = new Date();
+  const base = new Date(now.getFullYear(), now.getMonth() + catMonthOffset, 1);
+  const label = base.toLocaleDateString(getLocale().locale, { month: 'long', year: 'numeric' });
+  document.getElementById('cat-month').textContent = label.charAt(0).toUpperCase() + label.slice(1);
+  document.getElementById('cat-next').disabled = catMonthOffset >= 0;
+
+  // Solo registros de la moneda actual (no se mezclan monedas en un mismo total)
+  const inMonth = db.sessions.filter(r => {
+    const d = new Date(r.finished_at || r.created_at);
+    return d.getFullYear() === base.getFullYear() && d.getMonth() === base.getMonth() && r.country === country;
+  });
+  const acc = new Map();   // id de categoría (o null) → { count, total }
+  inMonth.forEach(r => {
+    const k = categoryById(r.category_id) ? r.category_id : null;
+    const a = acc.get(k) || { count: 0, total: 0 };
+    a.count++; a.total += r.total;
+    acc.set(k, a);
+  });
+  const monthTotal = inMonth.reduce((s, r) => s + r.total, 0);
+  document.getElementById('cat-month-total').textContent = `${formatPrice(monthTotal, country)} · ${inMonth.length} registro${inMonth.length !== 1 ? 's' : ''}`;
+
+  const rows = db.categories.map(c => ({ id: c.id, name: c.name, color: c.color, ...(acc.get(c.id) || { count: 0, total: 0 }) }));
+  rows.sort((a, b) => b.total - a.total);   // sort estable: los de $0 conservan el orden de creación
+  if (acc.has(null)) rows.push({ id: null, name: 'Sin categoría', color: '#C9C9C4', ...acc.get(null) });
+
+  if (!rows.length) {
+    list.innerHTML = '<div class="history-empty"><p>No tenés categorías.<br>Creá la primera con “+ Nueva”.</p></div>';
+    return;
+  }
+  list.innerHTML = rows.map(r => {
+    const pct = monthTotal > 0 ? Math.round((r.total / monthTotal) * 100) : 0;
+    return `
+    <div class="cat-row"${r.id ? ` onclick="openCategorySheet('${r.id}')"` : ''}>
+      <span class="cat-dot big" style="background:${r.color}"></span>
+      <div class="cat-row-info">
+        <div class="cat-row-name">${esc(r.name)}</div>
+        <div class="cat-row-sub">${r.count} registro${r.count !== 1 ? 's' : ''}${r.count ? ` · ${pct}%` : ''}</div>
+        <div class="cat-bar"><span style="width:${pct}%;background:${r.color}"></span></div>
+      </div>
+      <div class="cat-row-total">${formatPrice(r.total, country)}</div>
+    </div>`;
+  }).join('');
+}
+
+// ── HISTORIAL (compras y gastos) ──
+let hdRecordId = null;
+
+const catChipHtml = rec => {
+  const c = categoryById(rec.category_id);
+  return c ? `<span class="cat-chip small"><span class="cat-dot" style="background:${c.color}"></span>${esc(c.name)}</span>` : '';
+};
+
+const shortDate = iso => new Date(iso).toLocaleString(getLocale().locale, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+
+function recordSubtitle(r) {
+  const text = [];
+  if (r.name) text.push(esc(shortDate(r.finished_at || r.created_at)));   // con nombre propio, la fecha va acá
+  text.push(r.kind === 'expense' ? 'Gasto' : `${r.items.length} producto${r.items.length !== 1 ? 's' : ''}`);
+  return `<div class="hist-sub">${catChipHtml(r)}<span>${text.join(' · ')}</span></div>`;
+}
+
+function renderHistory() {
+  const body = document.getElementById('history-body');
+  const recs = newestFirst(db.sessions || [], r => (r.kind === 'expense' ? batchKey(r) : r.id), r => r.finished_at || r.created_at);
+
+  if (recs.length === 0) {
+    body.innerHTML = '<div class="history-empty"><p>Todavía no tenés<br>compras ni gastos.</p></div>';
+    return;
+  }
+  body.innerHTML = recs.map(r => `
+    <div class="history-item" onclick="openHistoryDetail('${r.id}')">
+      <div class="history-item-icon">${svg(r.kind === 'expense' ? 'card' : 'bag', 18)}</div>
+      <div class="history-item-info">
+        <div class="product-name">${esc(recordName(r))}</div>
+        <div class="history-item-count">${recordSubtitle(r)}</div>
+      </div>
+      <div class="history-item-total">${formatPrice(r.total, r.country)}</div>
+    </div>
+  `).join('');
+}
+
+function openHistoryDetail(id) {
+  if (!findRecord(id)) return;
+  hdRecordId = id;
+  renderHistoryDetail();
+  document.getElementById('history-detail').classList.add('open');
+}
+
+function renderHistoryDetail() {
+  const s = findRecord(hdRecordId);
+  if (!s) { closeHistoryDetail(); return; }
+  document.getElementById('hd-meta').innerHTML = `
+    <div class="hd-head">
+      <div class="hd-head-text">
+        <p class="hd-name">${esc(recordName(s))}</p>
+        <p class="hd-sub">${esc(formatDate(s.finished_at || s.created_at))} · ${s.kind === 'expense' ? 'Gasto' : 'Compra'}</p>
+        <div>${catChipHtml(s)}</div>
+      </div>
+      <button class="hd-edit" onclick="openRecordSheet('${s.id}')">Editar</button>
+    </div>`;
+  document.getElementById('hd-total').textContent = formatPrice(s.total, s.country);
+  document.getElementById('hd-items').innerHTML = renderItemList(s.items, s.country);
+}
+
+function closeHistoryDetail() {
+  document.getElementById('history-detail').classList.remove('open');
+  hdRecordId = null;
+}
+
 
 // ── LOG SYSTEM ──
 const LOG_MAX = 100;
@@ -1990,47 +2837,6 @@ function clearLogs() {
   const badge = document.getElementById('logs-error-badge');
   if (badge) badge.style.display = 'none';
   renderLogs();
-}
-
-// ── HISTORY ──
-function renderHistory() {
-  const body = document.getElementById('history-body');
-  const sessions = [...(db.sessions || [])].reverse();
-
-  if (sessions.length === 0) {
-    body.innerHTML = '<div class="history-empty"><p>Todavía no tenés<br>compras finalizadas.</p></div>';
-    return;
-  }
-
-  body.innerHTML = sessions.map(s => `
-    <div class="history-item" onclick="openHistoryDetail('${s.id}')">
-      <div class="history-item-icon">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/>
-          <line x1="3" y1="6" x2="21" y2="6"/>
-          <path d="M16 10a4 4 0 01-8 0"/>
-        </svg>
-      </div>
-      <div class="history-item-info">
-        <div class="product-name">${formatDate(s.finished_at || s.created_at)}</div>
-        <div class="history-item-count">${s.items.length} producto${s.items.length !== 1 ? 's' : ''}</div>
-      </div>
-      <div class="history-item-total">${formatPrice(s.total, s.country)}</div>
-    </div>
-  `).join('');
-}
-
-function openHistoryDetail(id) {
-  const s = db.sessions.find(s => s.id === id);
-  if (!s) return;
-  document.getElementById('hd-date').textContent = formatDate(s.finished_at || s.created_at);
-  document.getElementById('hd-total').textContent = formatPrice(s.total, s.country);
-  document.getElementById('hd-items').innerHTML = renderItemList(s.items, s.country);
-  document.getElementById('history-detail').classList.add('open');
-}
-
-function closeHistoryDetail() {
-  document.getElementById('history-detail').classList.remove('open');
 }
 
 // ── SETTINGS ──
@@ -2145,6 +2951,7 @@ function esc(s) {
   return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 function toast(msg) {
+  hideSnack();
   const t = document.getElementById('toast');
   t.textContent = msg;
   t.classList.add('show');
@@ -2153,6 +2960,7 @@ function toast(msg) {
 
 // ── INIT ──
 renderSidebarNav();
+document.body.dataset.screen = currentScreen;
 if (!db.settings) db.settings = { country: 'AR', decimal_sep: 'comma' };
 if (!db.settings.user) db.settings.user = {};
 renderSettings();
@@ -2169,6 +2977,7 @@ log('info', 'MyChango iniciado', {
   version: db.version,
   country: db.settings.country,
   sessions_stored: db.sessions.length,
+  categories: db.categories.length,
   active_session_items: currentSession?.items?.length || 0,
   user_agent: navigator.userAgent
 });
