@@ -601,10 +601,12 @@
 
   /* ── CONTROLES DE VOZ COMPARTIDOS (Compra y Gastos) ── */
   body { --voice-bottom: 100px; }                        /* Compra: encima del botón "Finalizar" */
-  body[data-screen="expense"] { --voice-bottom: 24px; }  /* Gastos: no hay botón inferior */
+  body[data-screen="expense"],
+  body[data-screen="income"] { --voice-bottom: 24px; }  /* Gastos e Ingresos: no hay botón inferior */
   #voice-controls { display: none; }
   body[data-screen="shop"] #voice-controls,
-  body[data-screen="expense"] #voice-controls { display: block; }
+  body[data-screen="expense"] #voice-controls,
+  body[data-screen="income"] #voice-controls { display: block; }
   .fab { bottom: var(--voice-bottom, 100px); }
 
   .snack {
@@ -700,6 +702,32 @@
     font-family: var(--font); font-size: 14px; font-weight: 700; color: var(--ink); cursor: pointer;
   }
   .settings-btn:active { background: var(--ink); color: var(--bg); }
+
+  /* ── INGRESOS Y BALANCE ── */
+  .amount-in { color: var(--green-dark); }
+  .amount-neg { color: var(--red); }
+  .product-qty.amount-in-box { background: #DDF5E7; color: var(--green-dark); }
+
+  .bal-body { padding: 16px 24px 60px; display: flex; flex-direction: column; gap: 18px; }
+  #balance { overflow-y: auto; }
+  .bal-hero { background: var(--ink); color: white; border-radius: 20px; padding: 24px; }
+  .bal-hero-label { font-size: 12px; text-transform: uppercase; letter-spacing: 1px; opacity: 0.6; }
+  .bal-hero-amount { font-size: 38px; font-weight: 800; letter-spacing: -1.5px; margin-top: 6px; font-variant-numeric: tabular-nums; }
+  .bal-hero.pos .bal-hero-amount { color: #6EE7A0; }
+  .bal-hero.neg .bal-hero-amount { color: #FF8A7A; }
+  .bal-usage-bar { height: 6px; border-radius: 6px; background: rgba(255,255,255,0.18); overflow: hidden; margin-top: 18px; }
+  .bal-usage-bar span { display: block; height: 100%; width: 0; border-radius: 6px; background: #6EE7A0; transition: width 0.3s ease; }
+  .bal-hero.neg .bal-usage-bar span { background: #FF8A7A; }
+  .bal-usage-text { font-size: 13px; opacity: 0.7; margin-top: 10px; }
+  .bal-rows { background: white; border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+  .bal-row { display: flex; align-items: center; gap: 14px; padding: 16px 18px; border-bottom: 1px solid var(--line); cursor: pointer; }
+  .bal-row:last-child { border-bottom: none; }
+  .bal-row:active { background: var(--line); }
+  .bal-row-info { flex: 1; min-width: 0; }
+  .bal-row-name { font-size: 15px; font-weight: 600; }
+  .bal-row-sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .bal-row-amount { font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; flex-shrink: 0; }
+  .bal-acc { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 18px; background: white; border: 1px solid var(--line); border-radius: var(--radius); }
 </style>
 </head>
 <body data-screen="home">
@@ -773,6 +801,22 @@
     <span class="total-amount" id="expense-today">$0</span>
   </div>
   <div class="product-list" id="expense-list"></div>
+</div>
+
+<!-- ══ SCREEN: INCOME ══ -->
+<div id="income" class="screen">
+  <div class="page-header">
+    <button class="hamburger" onclick="openSidebar()">
+      <span></span><span></span><span></span>
+    </button>
+    <h2>Ingresos</h2>
+    <span class="item-count" id="income-count">0 este mes</span>
+  </div>
+  <div class="total-bar">
+    <span class="total-label">Este mes</span>
+    <span class="total-amount amount-in" id="income-month">$0</span>
+  </div>
+  <div class="product-list" id="income-list"></div>
 </div>
 
 <!-- ══ SCREEN: QTY / CONFIRM ══ -->
@@ -867,6 +911,59 @@
     </div>
     <div class="summary-items" id="hd-items"></div>
     <button class="rec-delete" onclick="deleteRecordWithUndo(hdRecordId)">Eliminar registro</button>
+  </div>
+</div>
+
+<!-- ══ SCREEN: BALANCE ══ -->
+<div id="balance" class="screen">
+  <div class="page-header">
+    <button class="hamburger" onclick="openSidebar()">
+      <span></span><span></span><span></span>
+    </button>
+    <h2>Balance</h2>
+  </div>
+  <div class="bal-body">
+    <div class="month-nav">
+      <button class="month-btn" onclick="shiftBalMonth(-1)" aria-label="Mes anterior">‹</button>
+      <div class="month-info">
+        <div class="month-label" id="bal-month"></div>
+        <div class="month-total" id="bal-month-sub"></div>
+      </div>
+      <button class="month-btn" id="bal-next" onclick="shiftBalMonth(1)" aria-label="Mes siguiente">›</button>
+    </div>
+
+    <div class="bal-hero" id="bal-hero">
+      <p class="bal-hero-label" id="bal-hero-label">Restante de este mes</p>
+      <p class="bal-hero-amount" id="bal-amount">$0</p>
+      <div class="bal-usage-bar"><span id="bal-usage-fill"></span></div>
+      <p class="bal-usage-text" id="bal-usage-text"></p>
+    </div>
+
+    <div class="bal-rows">
+      <div class="bal-row" onclick="showScreen('income')">
+        <span class="cat-dot big" style="background:var(--green)"></span>
+        <div class="bal-row-info"><div class="bal-row-name">Ingresos</div><div class="bal-row-sub" id="bal-income-sub"></div></div>
+        <div class="bal-row-amount amount-in" id="bal-income"></div>
+      </div>
+      <div class="bal-row" onclick="showScreen('expense')">
+        <span class="cat-dot big" style="background:var(--red)"></span>
+        <div class="bal-row-info"><div class="bal-row-name">Gastos</div><div class="bal-row-sub" id="bal-expense-sub"></div></div>
+        <div class="bal-row-amount" id="bal-expense"></div>
+      </div>
+      <div class="bal-row" onclick="showScreen('history')">
+        <span class="cat-dot big" style="background:#E67E22"></span>
+        <div class="bal-row-info"><div class="bal-row-name">Compras</div><div class="bal-row-sub" id="bal-shopping-sub"></div></div>
+        <div class="bal-row-amount" id="bal-shopping"></div>
+      </div>
+    </div>
+
+    <div class="bal-acc">
+      <div>
+        <div class="bal-row-name">Saldo acumulado</div>
+        <div class="bal-row-sub">Todos los meses juntos</div>
+      </div>
+      <div class="bal-row-amount" id="bal-acc-amount"></div>
+    </div>
   </div>
 </div>
 
@@ -1048,7 +1145,7 @@
       <label class="edit-sheet-label">Monto</label>
       <input class="edit-field" id="rec-amount" type="number" inputmode="decimal" min="0" step="0.01">
     </div>
-    <div class="edit-sheet-field">
+    <div class="edit-sheet-field" id="rec-cat-field">
       <label class="edit-sheet-label">Categoría</label>
       <div class="cat-picker" id="rec-cats"></div>
     </div>
@@ -1332,16 +1429,33 @@ const ICONS = {
   retry:    '<polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/>',
   tag:      '<path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/>',
   card:     '<rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/>',
+  trend:    '<polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/>',
+  chart:    '<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>',
   trash:    '<polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6M9 6V4h6v2"/>',
 };
 function svg(name, size = 20) {
   return `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICONS[name] || ''}</svg>`;
 }
 
+// ── TIPOS DE REGISTRO ──
+// shopping = compra con varios productos · expense / income = un solo monto (un registro por ítem)
+// sign: hacia dónde mueve el balance (ingreso suma, gasto y compra restan)
+const KINDS = {
+  shopping: { label: 'Compra',  icon: 'bag',   sign: -1 },
+  expense:  { label: 'Gasto',   icon: 'card',  sign: -1 },
+  income:   { label: 'Ingreso', icon: 'trend', sign:  1 },
+};
+// Un dictado va al lugar de la pantalla desde la que se grabó
+const SCREEN_TARGET = { shop: 'shopping', expense: 'expense', income: 'income' };
+const TARGET_SCREEN = { shopping: 'shop', expense: 'expense', income: 'income' };
+const TARGET_NOUN = { shopping: ['producto', 'productos'], expense: ['gasto', 'gastos'], income: ['ingreso', 'ingresos'] };
+const targetOf = () => SCREEN_TARGET[currentScreen] || 'shopping';
+
 // ── NAVEGACIÓN GLOBAL (menú lateral) ──
 // Pantallas generales de la app. Los módulos NO se agregan acá: se registran en MODULES.
 const NAV_ITEMS = [
   { screen: 'home',     label: 'Inicio',        icon: 'home' },
+  { screen: 'balance',  label: 'Balance',       icon: 'chart' },
   { screen: 'history',  label: 'Historial',     icon: 'history' },
   { screen: 'categories', label: 'Categorías',   icon: 'tag' },
   { screen: 'settings', label: 'Configuración', icon: 'settings' },
@@ -1379,6 +1493,8 @@ const SCREEN_HOOKS = {
   home: renderHome,
   shop: renderShop,
   expense: renderExpenses,
+  income: renderIncome,
+  balance: renderBalance,
   categories: renderCategories,
   history: renderHistory,
   settings: renderSettings,
@@ -1387,7 +1503,7 @@ const SCREEN_HOOKS = {
 };
 
 // Pantallas que tienen micrófono (comparten los controles de voz, el aviso y el "Deshacer")
-const VOICE_SCREENS = ['shop', 'expense'];
+const VOICE_SCREENS = ['shop', 'expense', 'income'];
 
 function showScreen(id) {
   if (!VOICE_SCREENS.includes(id)) {
@@ -1439,7 +1555,33 @@ const expenseModule = {
     }];
   },
 };
-const MODULES = [shoppingModule, expenseModule];
+const incomeModule = {
+  id: 'income',
+  cards() {
+    return [{
+      icon: 'trend',
+      title: 'Registrar ingreso',
+      desc: 'Decí el ingreso y el monto.',
+      onClick: () => showScreen('income'),
+    }];
+  },
+};
+
+// Balance del mes actual: lo que entró menos lo que se gastó (gastos + compras)
+const balanceModule = {
+  id: 'balance',
+  cards() {
+    const m = balanceStats(inMonthOf(0));
+    return [{
+      icon: 'chart',
+      title: 'Balance',
+      desc: m.count ? `${monthName(0)}: ${signedPrice(m.balance, db.settings.country).replace(/^\+/, '')}` : 'Ingresos menos gastos y compras',
+      onClick: () => showScreen('balance'),
+    }];
+  },
+};
+
+const MODULES = [shoppingModule, expenseModule, incomeModule, balanceModule];
 
 // ── HOME ──
 function renderHome() {
@@ -1860,7 +2002,10 @@ function releaseRecorder() {
   setRecordingUI(false);
 }
 
+const REC_HINT = { shop: 'Decí producto y precio', expense: 'Decí gasto y monto', income: 'Decí ingreso y monto' };
+
 function setRecordingUI(on) {
+  if (on) document.querySelector('#rec-bar .rec-hint').textContent = REC_HINT[currentScreen] || REC_HINT.shop;
   const mic = document.getElementById('mic-btn');
   mic.classList.toggle('recording', on);
   mic.innerHTML = svg(on ? 'stop' : 'mic', 28);
@@ -1965,7 +2110,7 @@ async function apiPost(path, payload, timeoutMs = 25000) {
 
 function enqueueClip(blob, mime, durMs) {
   // El destino lo define la pantalla desde la que se grabó: carrito de compra o registro de gastos
-  const target = currentScreen === 'expense' ? 'expense' : 'shopping';
+  const target = targetOf();
   if (target === 'shopping' && !currentSession) return;
   const p = {
     id: uuid(), target, sessionId: target === 'shopping' ? currentSession.id : null,
@@ -1982,9 +2127,13 @@ function enqueueClip(blob, mime, durMs) {
 }
 
 // Redibuja la pantalla a la que pertenece el dictado
-function renderTarget(p) { if (p.target === 'expense') renderExpenses(); else renderShop(); }
+function renderTarget(p) {
+  if (p.target === 'expense') renderExpenses();
+  else if (p.target === 'income') renderIncome();
+  else renderShop();
+}
 
-const stillActive = p => pending.includes(p) && (p.target === 'expense' || currentSession?.id === p.sessionId);
+const stillActive = p => pending.includes(p) && (p.target !== 'shopping' || currentSession?.id === p.sessionId);
 
 async function runPipeline(p) {
   const loc = getLocale(p.target === 'shopping' ? currentSession?.country : undefined);
@@ -2056,16 +2205,16 @@ async function runPipeline(p) {
   }
 }
 
-// Convierte lo dictado en ítems del carrito o en gastos (uno por ítem) y avisa con "Deshacer"
+// Convierte lo dictado en ítems del carrito o en registros (gasto / ingreso, uno por ítem) y avisa con "Deshacer"
 function commitDictation(p, items, parser, unpriced, timings) {
   pending = pending.filter(x => x !== p);
   const common = { source: 'voice', parser, transcript: p.transcript, batch_id: p.id };
-  const isExpense = p.target === 'expense';
-  const country = isExpense ? db.settings.country : currentSession.country;
+  const isRecord = p.target !== 'shopping';
+  const country = isRecord ? db.settings.country : currentSession.country;
 
   let created;
-  if (isExpense) {
-    created = items.map(i => createExpenseRecord({ ...i, ...common }));
+  if (isRecord) {
+    created = items.map(i => createRecord(p.target, { ...i, ...common }));
   } else {
     created = items.map(i => addItem({ ...i, ...common }, { commit: false }));
     commitCart();
@@ -2080,8 +2229,8 @@ function commitDictation(p, items, parser, unpriced, timings) {
 
   const n = created.length;
   const sum = created.reduce((s, x) => s + (x.subtotal ?? x.total), 0);
-  const first = isExpense ? created[0].items[0] : created[0];
-  const label = isExpense ? (n === 1 ? 'gasto' : 'gastos') : (n === 1 ? 'producto' : 'productos');
+  const first = isRecord ? created[0].items[0] : created[0];
+  const label = TARGET_NOUN[p.target][n === 1 ? 0 : 1];
   timings.total_ms = Math.round(performance.now() - p.t0);   // desde que se envió el audio
   log('ok', `${parser === 'regex' ? 'Regex' : 'Flash-Lite'} · ${n} ${label} · ${formatPrice(sum, country)}`, {
     transcript: p.transcript, parser, target: p.target, unpriced,
@@ -2091,17 +2240,17 @@ function commitDictation(p, items, parser, unpriced, timings) {
   const text = (n === 1 ? `${first.name} · ${formatPrice(sum, country)}` : `${n} ${label} · ${formatPrice(sum, country)}`)
              + (unpriced.length ? ` · ${unpriced.length} sin precio` : '');
   const actions = [];
-  if (isExpense && n === 1) actions.push({ label: 'Categorizar', onClick: () => openRecordSheet(created[0].id) });
+  if (p.target === 'expense' && n === 1) actions.push({ label: 'Categorizar', onClick: () => openRecordSheet(created[0].id) });
   actions.push({ label: 'Deshacer', onClick: () => undoBatch(p.id, p.target) });
   showSnack(text, actions);
 }
 
 // Quita todo lo que salió de un mismo audio
 function undoBatch(batchId, target) {
-  if (target === 'expense') {
-    const ids = liveRecords().filter(r => r.kind === 'expense' && r.items[0]?.batch_id === batchId).map(r => r.id);
+  if (target !== 'shopping') {
+    const ids = liveRecords().filter(r => r.kind === target && r.items[0]?.batch_id === batchId).map(r => r.id);
     softDeleteRecords(ids);
-    renderExpenses();
+    renderTarget({ target });
   } else if (currentSession) {
     currentSession.items = currentSession.items.filter(i => i.batch_id !== batchId);
     commitCart();
@@ -2128,7 +2277,7 @@ function completePending(id) {
   const p = pending.find(x => x.id === id);
   if (!p || p.status !== 'error') return;
   openQtyScreen({ name: p.transcript || '', unit_price: null },
-    { pendingId: id, target: p.target, returnTo: p.target === 'expense' ? 'expense' : 'shop' });
+    { pendingId: id, target: p.target, returnTo: TARGET_SCREEN[p.target] });
 }
 
 // ── MÓDULO COMPRA · INICIO ──
@@ -2209,28 +2358,35 @@ function removeItem(id) {
 }
 
 // ── CARGA MANUAL / CONFIRMAR (pantalla con campos editables) ──
-// Sirve para el carrito (nombre + precio + cantidad) y para gastos (descripción + monto).
+// Sirve para el carrito (nombre + precio + cantidad) y para gastos e ingresos (descripción + monto).
 function openManualEntry() {
-  const target = currentScreen === 'expense' ? 'expense' : 'shopping';
-  openQtyScreen({ name: '', unit_price: null }, { target, returnTo: target === 'expense' ? 'expense' : 'shop' });
+  const target = targetOf();
+  openQtyScreen({ name: '', unit_price: null }, { target, returnTo: TARGET_SCREEN[target] });
 }
 
-const qtyCountry = () => (qtyContext?.target === 'expense' ? db.settings.country : currentSession?.country);
+const qtyCountry = () => (qtyContext?.target !== 'shopping' ? db.settings.country : currentSession?.country);
+
+const QTY_TEXT = {
+  shopping: { name: 'Nombre del producto', price: 'Precio unitario', ph: 'Nombre del producto', btn: 'Agregar al carrito' },
+  expense:  { name: 'Descripción',         price: 'Monto',           ph: 'Ej: Nafta',            btn: 'Guardar gasto' },
+  income:   { name: 'Descripción',         price: 'Monto',           ph: 'Ej: Sueldo',           btn: 'Guardar ingreso' },
+};
 
 function openQtyScreen(product, ctx = {}) {
   qtyContext = { target: 'shopping', returnTo: 'shop', ...ctx };
-  const isExpense = qtyContext.target === 'expense';
+  const isRecord = qtyContext.target !== 'shopping';
+  const tx = QTY_TEXT[qtyContext.target];
   currentQty = product.quantity || 1;
-  document.getElementById('qty-name-label').textContent = isExpense ? 'Descripción' : 'Nombre del producto';
-  document.getElementById('qty-price-label').textContent = isExpense ? 'Monto' : 'Precio unitario';
-  document.getElementById('qty-product-name').placeholder = isExpense ? 'Ej: Nafta' : 'Nombre del producto';
+  document.getElementById('qty-name-label').textContent = tx.name;
+  document.getElementById('qty-price-label').textContent = tx.price;
+  document.getElementById('qty-product-name').placeholder = tx.ph;
   document.getElementById('qty-product-name').value = product.name || '';
   document.getElementById('qty-unit-price-input').value = product.unit_price != null ? product.unit_price : '';
-  // Un gasto es un solo monto: sin cantidad ni subtotal
-  document.getElementById('qty-divider').style.display = isExpense ? 'none' : '';
-  document.getElementById('qty-block').style.display = isExpense ? 'none' : '';
-  document.querySelector('#qty-screen .qty-subtotal').style.display = isExpense ? 'none' : '';
-  document.getElementById('qty-add-btn').textContent = isExpense ? 'Guardar gasto' : 'Agregar al carrito';
+  // Un gasto o un ingreso es un solo monto: sin cantidad ni subtotal
+  document.getElementById('qty-divider').style.display = isRecord ? 'none' : '';
+  document.getElementById('qty-block').style.display = isRecord ? 'none' : '';
+  document.querySelector('#qty-screen .qty-subtotal').style.display = isRecord ? 'none' : '';
+  document.getElementById('qty-add-btn').textContent = tx.btn;
   updateQtyDisplay();
   showScreen('qty-screen');
   if (!product.name) setTimeout(() => document.getElementById('qty-product-name').focus(), 60);
@@ -2252,12 +2408,14 @@ document.getElementById('qty-unit-price-input').addEventListener('input', update
 
 function addToCart() {
   const ctx = qtyContext || { target: 'shopping', returnTo: 'shop' };
-  const isExpense = ctx.target === 'expense';
-  const name = document.getElementById('qty-product-name').value.trim() || (isExpense ? 'Gasto' : 'Producto');
+  const t = ctx.target;
+  const isRecord = t !== 'shopping';
+  const fallbackName = { shopping: 'Producto', expense: 'Gasto', income: 'Ingreso' }[t];
+  const name = document.getElementById('qty-product-name').value.trim() || fallbackName;
   const unit_price = parseFloat(document.getElementById('qty-unit-price-input').value);
 
   if (!unit_price || unit_price <= 0) { toast('Ingresá un monto válido'); return; }
-  if (!isExpense && !currentSession) return;
+  if (!isRecord && !currentSession) return;
 
   // Si venía de un dictado con error, ese dictado se reemplaza por lo completado
   const fromPending = ctx.pendingId ? pending.find(x => x.id === ctx.pendingId) : null;
@@ -2265,15 +2423,19 @@ function addToCart() {
   qtyContext = null;
 
   const fields = {
-    name, unit_price, quantity: isExpense ? 1 : currentQty,
+    name, unit_price, quantity: isRecord ? 1 : currentQty,
     source: fromPending ? 'voice' : 'manual',
     parser: fromPending ? 'manual' : undefined,
     transcript: fromPending?.transcript
   };
-  if (isExpense) {
-    const rec = createExpenseRecord(fields);
-    showScreen('expense');
-    showSnack(`${name} · ${formatPrice(rec.total, rec.country)}`, [{ label: 'Categorizar', onClick: () => openRecordSheet(rec.id) }]);
+  if (isRecord) {
+    const rec = createRecord(t, fields);
+    showScreen(TARGET_SCREEN[t]);
+    if (t === 'expense') {
+      showSnack(`${name} · ${formatPrice(rec.total, rec.country)}`, [{ label: 'Categorizar', onClick: () => openRecordSheet(rec.id) }]);
+    } else {
+      toast(`${name} · ${formatPrice(rec.total, rec.country)} ✓`);
+    }
   } else {
     addItem(fields);
     showScreen('shop');
@@ -2438,24 +2600,24 @@ function renderItemList(items, country) {
   `).join('');
 }
 
-// ── REGISTROS (compras y gastos) ──
+// ── REGISTROS (compras, gastos e ingresos) ──
 const findRecord = id => liveRecords().find(r => r.id === id) || null;
 const categoryById = id => liveCategories().find(c => c.id === id) || null;
 
-// Nombre por defecto: la fecha y hora de la compra; un gasto se llama como lo dictado ("Nafta").
+// Nombre por defecto: la fecha y hora de la compra; un gasto o un ingreso se llama como lo dictado ("Nafta", "Sueldo").
 function defaultRecordName(rec) {
-  if (rec.kind === 'expense' && rec.items?.length === 1) return rec.items[0].name;
+  if (rec.kind !== 'shopping' && rec.items?.length === 1) return rec.items[0].name;
   return formatDate(rec.finished_at || rec.created_at);
 }
 const recordName = rec => (rec.name && rec.name.trim()) || defaultRecordName(rec);
 
-// Un gasto = un registro con un solo ítem (un registro por ítem dictado)
-function createExpenseRecord({ name, unit_price, quantity = 1, source, parser, transcript, batch_id }) {
+// Un gasto o un ingreso = un registro con un solo ítem (un registro por ítem dictado)
+function createRecord(kind, { name, unit_price, quantity = 1, source, parser, transcript, batch_id }) {
   const q = Math.max(1, parseInt(quantity, 10) || 1);
   const now = new Date().toISOString();
   const item = {
     id: uuid(),
-    name: String(name || '').trim() || 'Gasto',
+    name: String(name || '').trim() || KINDS[kind].label,
     unit_price,
     quantity: q,
     subtotal: parseFloat((unit_price * q).toFixed(2)),
@@ -2467,7 +2629,7 @@ function createExpenseRecord({ name, unit_price, quantity = 1, source, parser, t
   if (batch_id) item.batch_id = batch_id;
   const rec = {
     id: uuid(), household_id: db.context.household_id, created_by: db.context.user_id,
-    kind: 'expense', country: db.settings.country, currency: getLocale().currency,
+    kind, country: db.settings.country, currency: getLocale().currency,
     created_at: now, finished_at: now, updated_at: now, deleted_at: null,
     name: null, category_id: null,
     items: [item], total: item.subtotal
@@ -2477,6 +2639,8 @@ function createExpenseRecord({ name, unit_price, quantity = 1, source, parser, t
   freshIds.add(rec.id);
   return rec;
 }
+const createExpenseRecord = fields => createRecord('expense', fields);
+const createIncomeRecord = fields => createRecord('income', fields);
 
 function updateRecord(id, patch) {
   const r = findRecord(id);
@@ -2489,6 +2653,8 @@ function updateRecord(id, patch) {
 // Redibuja lo que esté a la vista después de cambiar un registro o una categoría
 function refreshViews() {
   if (currentScreen === 'expense') renderExpenses();
+  else if (currentScreen === 'income') renderIncome();
+  else if (currentScreen === 'balance') renderBalance();
   else if (currentScreen === 'history') renderHistory();
   else if (currentScreen === 'categories') renderCategories();
   if (hdRecordId && document.getElementById('history-detail').classList.contains('open')) renderHistoryDetail();
@@ -2616,14 +2782,17 @@ function openRecordSheet(id) {
   const r = findRecord(id);
   if (!r) return;
   recSheetId = id;
-  const isExpense = r.kind === 'expense';
-  document.getElementById('rec-title').textContent = isExpense ? 'Editar gasto' : 'Editar compra';
+  const isSingle = r.kind !== 'shopping';          // gasto o ingreso: un solo monto
+  const label = KINDS[r.kind].label;
+  document.getElementById('rec-title').textContent = `Editar ${label.toLowerCase()}`;
   const nameEl = document.getElementById('rec-name');
   nameEl.value = r.name || '';
   nameEl.placeholder = defaultRecordName(r);
-  document.getElementById('rec-amount-field').style.display = isExpense ? '' : 'none';
-  document.getElementById('rec-amount').value = isExpense ? r.total : '';
-  document.getElementById('rec-delete-btn').textContent = isExpense ? 'Eliminar gasto' : 'Eliminar compra';
+  document.getElementById('rec-amount-field').style.display = isSingle ? '' : 'none';
+  document.getElementById('rec-amount').value = isSingle ? r.total : '';
+  document.getElementById('rec-delete-btn').textContent = `Eliminar ${label.toLowerCase()}`;
+  // Las categorías son de gasto: un ingreso no lleva categoría
+  document.getElementById('rec-cat-field').style.display = r.kind === 'income' ? 'none' : '';
   renderCatPicker('rec-cats', r.category_id, 'rec');
   document.getElementById('rec-overlay').classList.add('open');
 }
@@ -2636,17 +2805,17 @@ function closeRecordSheet() {
 function saveRecordSheet() {
   const r = findRecord(recSheetId);
   if (!r) { closeRecordSheet(); return; }
-  if (r.kind === 'expense') {
+  if (r.kind !== 'shopping') {
     const amount = parseFloat(document.getElementById('rec-amount').value);
     if (!amount || amount <= 0) { toast('Ingresá un monto válido'); return; }
-    if (Math.abs(amount - r.total) > 0.005) {   // un gasto es un solo monto
+    if (Math.abs(amount - r.total) > 0.005) {   // un gasto o un ingreso es un solo monto
       const it = r.items[0];
       it.quantity = 1; it.unit_price = amount; it.subtotal = amount;
       r.total = amount;
     }
   }
   r.name = document.getElementById('rec-name').value.trim() || null;   // vacío = nombre por defecto
-  r.category_id = catPick.rec || null;
+  r.category_id = r.kind === 'income' ? null : (catPick.rec || null);
   r.updated_at = nowIso();
   saveDB();
   closeRecordSheet();
@@ -2731,7 +2900,7 @@ function deleteCategoryFromSheet() {
   refreshViews();
 }
 
-// ── PANTALLA CATEGORÍAS (gasto por categoría, por mes) ──
+// ── PANTALLA CATEGORÍAS (gasto por categoría, por mes; los ingresos no cuentan) ──
 let catMonthOffset = 0;   // 0 = este mes, -1 = el anterior…
 function shiftCatMonth(delta) {
   catMonthOffset = Math.min(0, catMonthOffset + delta);   // no hay meses futuros
@@ -2751,7 +2920,7 @@ function renderCategories() {
   // Solo registros de la moneda actual (no se mezclan monedas en un mismo total)
   const inMonth = liveRecords().filter(r => {
     const d = new Date(r.finished_at || r.created_at);
-    return d.getFullYear() === base.getFullYear() && d.getMonth() === base.getMonth() && r.country === country;
+    return r.kind !== 'income' && d.getFullYear() === base.getFullYear() && d.getMonth() === base.getMonth() && r.country === country;
   });
   const acc = new Map();   // id de categoría (o null) → { count, total }
   inMonth.forEach(r => {
@@ -2786,7 +2955,7 @@ function renderCategories() {
   }).join('');
 }
 
-// ── HISTORIAL (compras y gastos) ──
+// ── HISTORIAL (compras, gastos e ingresos) ──
 let hdRecordId = null;
 
 const catChipHtml = rec => {
@@ -2803,31 +2972,31 @@ const shortDate = iso => {
 };
 
 // En la lista, sin nombre propio una compra se titula con la fecha corta (entra sin cortarse)
-const historyTitle = r => (r.name && r.name.trim()) || (r.kind === 'expense' ? r.items[0].name : shortDate(r.finished_at || r.created_at));
+const historyTitle = r => (r.name && r.name.trim()) || (r.kind !== 'shopping' ? r.items[0].name : shortDate(r.finished_at || r.created_at));
 
 function recordSubtitle(r) {
   const text = [];
   if (r.name) text.push(esc(shortDate(r.finished_at || r.created_at)));   // con nombre propio, la fecha va acá
-  text.push(r.kind === 'expense' ? 'Gasto' : `${r.items.length} producto${r.items.length !== 1 ? 's' : ''}`);
+  text.push(r.kind === 'shopping' ? `${r.items.length} producto${r.items.length !== 1 ? 's' : ''}` : KINDS[r.kind].label);
   return `<div class="hist-sub">${catChipHtml(r)}<span>${text.join(' · ')}</span></div>`;
 }
 
 function renderHistory() {
   const body = document.getElementById('history-body');
-  const recs = newestFirst(liveRecords(), r => (r.kind === 'expense' ? batchKey(r) : r.id), r => r.finished_at || r.created_at);
+  const recs = newestFirst(liveRecords(), r => (r.kind === 'shopping' ? r.id : batchKey(r)), r => r.finished_at || r.created_at);
 
   if (recs.length === 0) {
-    body.innerHTML = '<div class="history-empty"><p>Todavía no tenés<br>compras ni gastos.</p></div>';
+    body.innerHTML = '<div class="history-empty"><p>Todavía no tenés<br>compras, gastos ni ingresos.</p></div>';
     return;
   }
   body.innerHTML = recs.map(r => `
     <div class="history-item" onclick="openHistoryDetail('${r.id}')">
-      <div class="history-item-icon">${svg(r.kind === 'expense' ? 'card' : 'bag', 18)}</div>
+      <div class="history-item-icon">${svg(KINDS[r.kind].icon, 18)}</div>
       <div class="history-item-info">
         <div class="product-name">${esc(historyTitle(r))}</div>
         <div class="history-item-count">${recordSubtitle(r)}</div>
       </div>
-      <div class="history-item-total">${formatPrice(r.total, r.country)}</div>
+      <div class="history-item-total${r.kind === 'income' ? ' amount-in' : ''}">${r.kind === 'income' ? signedPrice(r.total, r.country) : formatPrice(r.total, r.country)}</div>
       <button class="product-delete" onclick="event.stopPropagation();deleteRecordWithUndo('${r.id}')" aria-label="Eliminar">${svg('trash', 16)}</button>
     </div>
   `).join('');
@@ -2847,7 +3016,7 @@ function renderHistoryDetail() {
     <div class="hd-head">
       <div class="hd-head-text">
         <p class="hd-name">${esc(recordName(s))}</p>
-        <p class="hd-sub">${esc(formatDate(s.finished_at || s.created_at))} · ${s.kind === 'expense' ? 'Gasto' : 'Compra'}</p>
+        <p class="hd-sub">${esc(formatDate(s.finished_at || s.created_at))} · ${KINDS[s.kind].label}</p>
         <div>${catChipHtml(s)}</div>
       </div>
       <button class="hd-edit" onclick="openRecordSheet('${s.id}')">Editar</button>
@@ -3050,6 +3219,144 @@ function downloadExport() {
   const counts = Object.fromEntries(Object.entries(data.tables).map(([k, v]) => [k, v.length]));
   log('info', 'Datos exportados', counts);
   toast('Copia exportada ✓');
+}
+
+// ── FORMATO CON SIGNO ──
+// "+$850.000,00" para ingresos, "−$5.000,00" (signo menos real) para negativos, "$0,00" para cero
+function signedPrice(n, country) {
+  const v = Math.round(Number(n || 0) * 100) / 100;
+  if (v < 0) return '−' + formatPrice(-v, country);
+  return (v > 0 ? '+' : '') + formatPrice(v, country);
+}
+
+// ── MESES ──
+const monthBase = offset => { const now = new Date(); return new Date(now.getFullYear(), now.getMonth() + offset, 1); };
+const inMonthOf = offset => {
+  const base = monthBase(offset);
+  return r => { const d = new Date(r.finished_at || r.created_at); return d.getFullYear() === base.getFullYear() && d.getMonth() === base.getMonth(); };
+};
+function monthName(offset) {
+  const label = monthBase(offset).toLocaleDateString(getLocale().locale, { month: 'long' });
+  return label.charAt(0).toUpperCase() + label.slice(1);
+}
+function monthLabel(offset) {
+  const label = monthBase(offset).toLocaleDateString(getLocale().locale, { month: 'long', year: 'numeric' });
+  return label.charAt(0).toUpperCase() + label.slice(1);
+}
+
+// ── PANTALLA INGRESOS ──
+function incomeRowHtml(r) {
+  return `
+    <div class="product-item${freshIds.has(r.id) ? ' enter' : ''}" onclick="openRecordSheet('${r.id}')">
+      <div class="product-qty amount-in-box">${svg('trend', 16)}</div>
+      <div class="product-info">
+        <div class="product-name">${esc(recordName(r))}</div>
+        <div class="product-unit">${timeLabel(r.created_at)}</div>
+      </div>
+      <div class="product-price amount-in">${signedPrice(r.total, r.country)}</div>
+    </div>`;
+}
+
+function renderIncome() {
+  const list = document.getElementById('income-list');
+  if (!list) return;
+  const country = db.settings.country;
+  const cur = getLocale().currency;
+  const all = newestFirst(liveRecords().filter(r => r.kind === 'income'), batchKey, r => r.created_at);
+  const thisMonth = all.filter(inMonthOf(0));
+  const monthTotal = thisMonth.filter(r => r.currency === cur).reduce((s, r) => s + r.total, 0);
+  document.getElementById('income-month').textContent = signedPrice(monthTotal, country);
+  document.getElementById('income-count').textContent = `${thisMonth.length} este mes`;
+
+  const rows = pending.filter(p => p.target === 'income');
+  if (!all.length && !rows.length) {
+    list.innerHTML = `<div class="empty-state">
+      <p>Tocá el micrófono y decí el ingreso<br>y el monto.</p>
+      <p class="empty-example">«Sueldo 850000»</p>
+      <p class="empty-tip">Podés decir varios seguidos:<br>«Freelance 120000, alquiler 300000»</p>
+      <span class="arrow">↓</span></div>`;
+    return;
+  }
+  let html = rows.map(pendingRowHtml).join('');
+  let lastDay = null;
+  all.slice(0, 80).forEach(r => {
+    const k = dayKey(r.created_at);
+    if (k !== lastDay) { html += `<div class="day-header">${esc(dayLabel(r.created_at))}</div>`; lastDay = k; }
+    html += incomeRowHtml(r);
+  });
+  list.innerHTML = html;
+  freshIds.clear();
+}
+
+// ── BALANCE = ingresos − (gastos + compras) ──
+// Suma por tipo los registros vivos de la moneda actual que cumplan `filterFn`.
+// Nunca se mezclan monedas: lo que está en otra moneda se cuenta aparte (`other`).
+const round2 = n => Math.round(n * 100) / 100;
+
+function balanceStats(filterFn) {
+  const cur = getLocale().currency;
+  const inScope = liveRecords().filter(filterFn);
+  const recs = inScope.filter(r => r.currency === cur);
+  const sum = kind => round2(recs.filter(r => r.kind === kind).reduce((s, r) => s + r.total, 0));
+  const count = kind => recs.filter(r => r.kind === kind).length;
+  const income = sum('income'), expense = sum('expense'), shopping = sum('shopping');
+  const spent = round2(expense + shopping);
+  return {
+    income, expense, shopping, spent, balance: round2(income - spent),
+    counts: { income: count('income'), expense: count('expense'), shopping: count('shopping') },
+    count: recs.length,
+    other: inScope.length - recs.length      // registros en otra moneda: no entran en las cuentas
+  };
+}
+
+let balMonthOffset = 0;   // 0 = este mes, -1 = el anterior…
+function shiftBalMonth(delta) {
+  balMonthOffset = Math.min(0, balMonthOffset + delta);   // no hay meses futuros
+  renderBalance();
+}
+
+const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+
+function renderBalance() {
+  if (!document.getElementById('bal-amount')) return;
+  const country = db.settings.country;
+  const cur = getLocale().currency;
+  const m = balanceStats(inMonthOf(balMonthOffset));
+
+  document.getElementById('bal-month').textContent = monthLabel(balMonthOffset);
+  const otherTxt = m.other ? ` · ${plural(m.other, 'registro', 'registros')} en otra moneda no ${m.other === 1 ? 'se cuenta' : 'se cuentan'}` : '';
+  document.getElementById('bal-month-sub').textContent = `En ${cur}${otherTxt}`;
+  document.getElementById('bal-next').disabled = balMonthOffset >= 0;
+
+  // Restante del mes
+  const hero = document.getElementById('bal-hero');
+  hero.classList.toggle('neg', m.balance < 0);
+  hero.classList.toggle('pos', m.balance > 0);
+  document.getElementById('bal-hero-label').textContent = balMonthOffset === 0 ? 'Restante de este mes' : `Restante de ${monthName(balMonthOffset)}`;
+  document.getElementById('bal-amount').textContent = signedPrice(m.balance, country).replace(/^\+/, '');
+
+  // Cuánto de lo que entró ya se gastó
+  const pct = m.income > 0 ? Math.round((m.spent / m.income) * 100) : (m.spent > 0 ? 100 : 0);
+  document.getElementById('bal-usage-fill').style.width = `${Math.min(100, pct)}%`;
+  document.getElementById('bal-usage-text').textContent =
+    m.income > 0 ? (m.spent > m.income ? `Gastaste ${pct}% de lo que ingresó` : `Usaste el ${pct}% de tus ingresos`)
+    : m.spent > 0 ? 'Todavía no cargaste ingresos este mes'
+    : 'Sin movimientos este mes';
+
+  // Desglose (tocar lleva a cada lista)
+  document.getElementById('bal-income').textContent = signedPrice(m.income, country);
+  document.getElementById('bal-income-sub').textContent = plural(m.counts.income, 'ingreso', 'ingresos');
+  document.getElementById('bal-expense').textContent = m.expense ? '−' + formatPrice(m.expense, country) : formatPrice(0, country);
+  document.getElementById('bal-expense-sub').textContent = plural(m.counts.expense, 'gasto', 'gastos');
+  document.getElementById('bal-shopping').textContent = m.shopping ? '−' + formatPrice(m.shopping, country) : formatPrice(0, country);
+  document.getElementById('bal-shopping-sub').textContent = plural(m.counts.shopping, 'compra', 'compras');
+
+  // Saldo acumulado: todos los meses juntos
+  const all = balanceStats(() => true);
+  const accEl = document.getElementById('bal-acc-amount');
+  accEl.textContent = signedPrice(all.balance, country).replace(/^\+/, '');
+  accEl.classList.toggle('amount-in', all.balance > 0);
+  accEl.classList.toggle('amount-neg', all.balance < 0);
 }
 
 // ── LOG SYSTEM ──
