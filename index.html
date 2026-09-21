@@ -694,6 +694,12 @@
   .cat-bar span { display: block; height: 100%; border-radius: 4px; }
   .cat-row-total { font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; flex-shrink: 0; min-width: 104px; text-align: right; }
   .hist-sub { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin-top: 2px; }
+
+  .settings-btn {
+    background: var(--line); border: none; border-radius: 8px; padding: 8px 14px;
+    font-family: var(--font); font-size: 14px; font-weight: 700; color: var(--ink); cursor: pointer;
+  }
+  .settings-btn:active { background: var(--ink); color: var(--bg); }
 </style>
 </head>
 <body data-screen="home">
@@ -860,6 +866,7 @@
       <p class="total-amount" id="hd-total">$0</p>
     </div>
     <div class="summary-items" id="hd-items"></div>
+    <button class="rec-delete" onclick="deleteRecordWithUndo(hdRecordId)">Eliminar registro</button>
   </div>
 </div>
 
@@ -924,6 +931,18 @@
             <option value="comma">Coma (1.234,56)</option>
             <option value="dot">Punto (1,234.56)</option>
           </select>
+        </div>
+      </div>
+    </div>
+    <div>
+      <p class="settings-section-title">Datos</p>
+      <div class="settings-group">
+        <div class="settings-row">
+          <div>
+            <div class="settings-row-label">Exportar copia</div>
+            <div class="settings-row-sub">Archivo JSON con todo, listo para migrar</div>
+          </div>
+          <button class="settings-btn" onclick="downloadExport()">Exportar</button>
         </div>
       </div>
     </div>
@@ -1107,30 +1126,41 @@ const COUNTRY_LOCALES = {
   BR: { locale: 'pt-BR', currency: 'BRL', symbol: 'R$',  decimals: 2 },
 };
 
-// ── MODELO DE DATOS (localStorage) ──
+// ── MODELO DE DATOS (localStorage · versión 5) ──
+// Documento local que replica el modelo relacional multi-tenant (ver db/DATA_MODEL.md y
+// db/schema.postgres.sql). Cada colección es una tabla; los `items` de un registro viven
+// embebidos acá y se aplanan a `record_items` al exportar (buildExport).
+//
 // {
-//   version: 4,
-//   settings: { country, decimal_sep, user: { firstname, lastname, email, avatar } },
-//   categories: [ { id, name, color, created_at } ],
-//   active_session: <registro> | null,    // compra en curso: se guarda en cada cambio
-//   sessions: [ <registro> ]              // registros terminados: compras y gastos
+//   version: 5,
+//   settings:          { country, decimal_sep },      // preferencias del usuario/dispositivo → users.preferences
+//   context:           { user_id, household_id },     // quién opera y en qué grupo familiar
+//   users:             [ { id, auth_subject, email, first_name, last_name, avatar_data_url,
+//                          created_at, updated_at, deleted_at } ],
+//   households:        [ { id, name, created_by, created_at, updated_at, deleted_at } ],   // grupo familiar = tenant
+//   household_members: [ { household_id, user_id, role:'owner'|'admin'|'member', joined_at } ],
+//   categories:        [ { id, household_id, name, color, created_by, created_at, updated_at, deleted_at } ],
+//   records:           [ <registro> ],                // compras y gastos terminados
+//   draft:             <registro> | null              // compra en curso (solo cliente, no se sincroniza)
 // }
-// registro = { id, kind:'shopping'|'expense', country, created_at, finished_at, total,
-//              name: string|null,          // null = nombre por defecto (ver recordName)
-//              category_id: string|null,   // null = sin categoría
-//              items: [ <item> ] }
-//   · kind:'shopping' → una compra con varios productos (se cierra con "Finalizar")
-//   · kind:'expense'  → un gasto suelto: un registro por ítem dictado, con un solo item
+// registro = { id, household_id, created_by, kind:'shopping'|'expense', name|null, category_id|null,
+//              country, currency, total, created_at, finished_at, updated_at, deleted_at,
+//              items:[ <item> ] }
+//   · shopping → una compra con varios productos (se cierra con "Finalizar")
+//   · expense  → un gasto suelto: un registro por ítem dictado, con un solo item
 // item     = { id, name, unit_price, quantity, subtotal, added_at, batch_id?,
 //              source:'voice'|'manual', parser?:'regex'|'llm'|'manual', transcript? }
 //   batch_id agrupa lo que salió de un mismo audio (sirve para "Deshacer").
 //
-// Pensado para crecer: un módulo nuevo (presupuestos, cuentas…) agrega su propia colección
-// al mismo objeto y se registra en MODULES, sin tocar `sessions` ni las pantallas existentes.
-// Si más adelante conviene un libro de movimientos único, cada registro ya trae
-// fecha, monto, moneda, categoría y origen para migrarlo.
+// Reglas pensadas para la migración a base multi-tenant:
+//   · IDs = UUID generados en el cliente (se puede crear sin conexión y subir después sin choques).
+//   · Todo lo que pertenece a un grupo lleva household_id; created_by dice qué usuario lo creó.
+//   · Borrado lógico: deleted_at (lápida) en registros y categorías; la UI solo ve lo no borrado.
+//   · updated_at en cada cambio (base para sincronizar: gana el más reciente).
+//   · Cada registro guarda su moneda (currency): nunca se mezclan monedas en un total.
 const DB_KEY = 'carrito_v1';   // se mantiene para no perder los datos ya guardados
-const DB_VERSION = 4;
+const DB_VERSION = 5;
+const TOMBSTONE_DAYS = 30;     // las lápidas se limpian a los 30 días (con sync: solo las ya confirmadas)
 
 // Categorías iniciales (se pueden renombrar, recolorear o borrar en la sección Categorías)
 const DEFAULT_CATEGORIES = [
@@ -1139,45 +1169,109 @@ const DEFAULT_CATEGORIES = [
 ];
 const CATEGORY_COLORS = ['#E74C3C', '#E67E22', '#F1C40F', '#2ECC71', '#1ABC9C', '#3498DB', '#9B59B6', '#8A8A8A'];
 
-function seedCategories() {
+function seedCategories(householdId, userId) {
   const now = new Date().toISOString();
-  return DEFAULT_CATEGORIES.map(([name, color]) => ({ id: uuid(), name, color, created_at: now }));
+  return DEFAULT_CATEGORIES.map(([name, color]) => ({
+    id: uuid(), household_id: householdId, name, color, created_by: userId,
+    created_at: now, updated_at: now, deleted_at: null
+  }));
+}
+
+// Usuario + grupo familiar locales: hoy hay una sola persona en un solo hogar, pero con la
+// misma forma que tendrán en el servidor (al iniciar sesión se suben con estos mismos IDs).
+function newLocalIdentity(prevUser) {
+  const now = new Date().toISOString();
+  const u = prevUser || {};
+  const user = {
+    id: uuid(), auth_subject: null,
+    email: u.email || null, first_name: u.firstname || null, last_name: u.lastname || null,
+    avatar_data_url: u.avatar || null,
+    created_at: now, updated_at: now, deleted_at: null
+  };
+  const household = { id: uuid(), name: 'Mi hogar', created_by: user.id, created_at: now, updated_at: now, deleted_at: null };
+  return {
+    users: [user],
+    households: [household],
+    household_members: [{ household_id: household.id, user_id: user.id, role: 'owner', joined_at: now }],
+    context: { user_id: user.id, household_id: household.id }
+  };
 }
 
 function defaultDB() {
+  const ident = newLocalIdentity();
   return {
     version: DB_VERSION,
     settings: { country: 'AR', decimal_sep: 'comma' },
-    categories: seedCategories(),
-    active_session: null,
-    sessions: []
+    ...ident,
+    categories: seedCategories(ident.context.household_id, ident.context.user_id),
+    records: [],
+    draft: null
   };
 }
 
 function migrateDB(d) {
   if (!d || typeof d !== 'object') return defaultDB();
+  const now = new Date().toISOString();
   d.settings = d.settings || { country: 'AR', decimal_sep: 'comma' };
-  d.sessions = Array.isArray(d.sessions) ? d.sessions : [];
   const from = d.version || 1;
 
+  // v5: `sessions` pasa a `records` y `active_session` a `draft`
+  d.records = [...(Array.isArray(d.records) ? d.records : []), ...(Array.isArray(d.sessions) ? d.sessions : [])];
+  delete d.sessions;
+  if ('active_session' in d) { d.draft = d.draft || d.active_session; delete d.active_session; }
+  d.draft = d.draft || null;
+
   if (from < 3) {
-    // v3: cada compra recuerda su país/moneda, y hay carrito en curso persistente
-    d.sessions.forEach(s => {
+    // v3: cada compra recuerda su país/moneda
+    d.records.forEach(s => {
       s.kind = s.kind || 'shopping';
       s.country = s.country || d.settings.country || 'AR';
     });
   }
-  // v4: categorías + nombre/categoría opcionales en cada registro
-  if (!Array.isArray(d.categories)) d.categories = seedCategories();
+
+  // v5: usuario y grupo familiar locales (la cuenta de settings.user pasa a users)
+  if (!Array.isArray(d.users) || !d.users.length || !Array.isArray(d.households) || !d.households.length) {
+    Object.assign(d, newLocalIdentity(d.settings.user));
+  }
+  delete d.settings.user;
+  if (!Array.isArray(d.household_members)) d.household_members = [];
+  if (!d.context || !d.users.some(u => u.id === d.context.user_id) || !d.households.some(h => h.id === d.context.household_id)) {
+    d.context = { user_id: d.users[0].id, household_id: d.households[0].id };
+  }
+  if (!d.household_members.some(m => m.household_id === d.context.household_id && m.user_id === d.context.user_id)) {
+    d.household_members.push({ household_id: d.context.household_id, user_id: d.context.user_id, role: 'owner', joined_at: now });
+  }
+  const ctx = d.context;
+
+  // v4: categorías · v5: pertenecen a un grupo y llevan sello de cambios
+  if (!Array.isArray(d.categories)) d.categories = seedCategories(ctx.household_id, ctx.user_id);
+  d.categories.forEach(c => {
+    c.household_id = c.household_id || ctx.household_id;
+    c.created_by = c.created_by || ctx.user_id;
+    c.updated_at = c.updated_at || c.created_at || now;
+    if (!('deleted_at' in c)) c.deleted_at = null;
+  });
+
+  // registros (y borrador): tenant, autor, moneda propia y sello de cambios
   const normalize = r => {
     if (!r) return;
     if (!('name' in r)) r.name = null;
     if (!('category_id' in r)) r.category_id = null;
+    r.household_id = r.household_id || ctx.household_id;
+    r.created_by = r.created_by || ctx.user_id;
+    r.currency = r.currency || COUNTRY_LOCALES[r.country]?.currency || 'ARS';
+    r.updated_at = r.updated_at || r.finished_at || r.created_at || now;
+    if (!('deleted_at' in r)) r.deleted_at = null;
   };
-  d.sessions.forEach(normalize);
-  normalize(d.active_session);
+  d.records.forEach(normalize);
+  normalize(d.draft);
 
-  d.active_session = d.active_session || null;
+  // lápidas viejas: se limpian (con sync real, solo las ya confirmadas por el servidor)
+  const cutoff = Date.now() - TOMBSTONE_DAYS * 86400000;
+  const expired = x => x.deleted_at && Date.parse(x.deleted_at) < cutoff;
+  d.records = d.records.filter(r => !expired(r));
+  d.categories = d.categories.filter(c => !expired(c));
+
   d.version = DB_VERSION;
   return d;
 }
@@ -1194,7 +1288,7 @@ function uuid() { return crypto.randomUUID ? crypto.randomUUID() : Date.now().to
 
 // ── STATE ──
 let db = loadDB();
-let currentSession = (db.active_session && db.active_session.items?.length) ? db.active_session : null;
+let currentSession = (db.draft && db.draft.items?.length) ? db.draft : null;
 let pending = [];            // dictados en proceso o con error (solo en memoria)
 const freshIds = new Set();  // filas recién agregadas (para animarlas una sola vez)
 let currentQty = 1;
@@ -2005,8 +2099,8 @@ function commitDictation(p, items, parser, unpriced, timings) {
 // Quita todo lo que salió de un mismo audio
 function undoBatch(batchId, target) {
   if (target === 'expense') {
-    db.sessions = db.sessions.filter(r => !(r.kind === 'expense' && r.items[0]?.batch_id === batchId));
-    saveDB();
+    const ids = liveRecords().filter(r => r.kind === 'expense' && r.items[0]?.batch_id === batchId).map(r => r.id);
+    softDeleteRecords(ids);
     renderExpenses();
   } else if (currentSession) {
     currentSession.items = currentSession.items.filter(i => i.batch_id !== batchId);
@@ -2051,14 +2145,20 @@ function startNewShopping() {
 }
 
 function newSession() {
+  const now = nowIso();
   currentSession = {
     id: uuid(),
+    household_id: db.context.household_id,   // a qué grupo familiar pertenece
+    created_by: db.context.user_id,          // quién la creó
     kind: 'shopping',
-    country: db.settings.country,   // la compra conserva su moneda aunque cambies el país después
-    created_at: new Date().toISOString(),
+    country: db.settings.country,            // la compra conserva su moneda aunque cambies el país después
+    currency: getLocale().currency,
+    created_at: now,
     finished_at: null,
-    name: null,                     // null = nombre por defecto (fecha y hora)
-    category_id: null,              // null = sin categoría
+    updated_at: now,
+    deleted_at: null,
+    name: null,                              // null = nombre por defecto (fecha y hora)
+    category_id: null,                       // null = sin categoría
     items: [],
     total: 0
   };
@@ -2068,7 +2168,7 @@ function newSession() {
 }
 
 function persistActive() {
-  db.active_session = currentSession;
+  db.draft = currentSession;
   saveDB();
 }
 
@@ -2076,6 +2176,7 @@ function persistActive() {
 function commitCart() {
   if (!currentSession) return;
   currentSession.total = parseFloat(currentSession.items.reduce((s, i) => s + i.subtotal, 0).toFixed(2));
+  currentSession.updated_at = nowIso();
   persistActive();
   renderShop();
 }
@@ -2297,9 +2398,10 @@ function showSummary() {
   if (failed && !confirm(`Hay ${failed} dictado${failed !== 1 ? 's' : ''} sin precio que no se van a sumar. ¿Finalizar igual?`)) return;
 
   const done = currentSession;
-  done.finished_at = new Date().toISOString();
-  db.sessions.push({ ...done, items: [...done.items] });
-  db.active_session = null;
+  done.finished_at = nowIso();
+  done.updated_at = done.finished_at;
+  db.records.push({ ...done, items: [...done.items] });
+  db.draft = null;
   saveDB();
   currentSession = null;
   pending = pending.filter(p => p.target !== 'shopping');
@@ -2337,8 +2439,8 @@ function renderItemList(items, country) {
 }
 
 // ── REGISTROS (compras y gastos) ──
-const findRecord = id => (db.sessions || []).find(r => r.id === id) || null;
-const categoryById = id => (db.categories || []).find(c => c.id === id) || null;
+const findRecord = id => liveRecords().find(r => r.id === id) || null;
+const categoryById = id => liveCategories().find(c => c.id === id) || null;
 
 // Nombre por defecto: la fecha y hora de la compra; un gasto se llama como lo dictado ("Nafta").
 function defaultRecordName(rec) {
@@ -2364,12 +2466,13 @@ function createExpenseRecord({ name, unit_price, quantity = 1, source, parser, t
   if (transcript) item.transcript = transcript;
   if (batch_id) item.batch_id = batch_id;
   const rec = {
-    id: uuid(), kind: 'expense', country: db.settings.country,
-    created_at: now, finished_at: now,
+    id: uuid(), household_id: db.context.household_id, created_by: db.context.user_id,
+    kind: 'expense', country: db.settings.country, currency: getLocale().currency,
+    created_at: now, finished_at: now, updated_at: now, deleted_at: null,
     name: null, category_id: null,
     items: [item], total: item.subtotal
   };
-  db.sessions.push(rec);
+  db.records.push(rec);
   saveDB();
   freshIds.add(rec.id);
   return rec;
@@ -2378,7 +2481,7 @@ function createExpenseRecord({ name, unit_price, quantity = 1, source, parser, t
 function updateRecord(id, patch) {
   const r = findRecord(id);
   if (!r) return null;
-  Object.assign(r, patch);
+  Object.assign(r, patch, { updated_at: nowIso() });
   saveDB();
   return r;
 }
@@ -2457,7 +2560,7 @@ function renderExpenses() {
   const list = document.getElementById('expense-list');
   if (!list) return;
   const country = db.settings.country;
-  const all = newestFirst(db.sessions.filter(r => r.kind === 'expense'), batchKey, r => r.created_at);
+  const all = newestFirst(liveRecords().filter(r => r.kind === 'expense'), batchKey, r => r.created_at);
   const today = all.filter(r => dayKey(r.created_at) === dayKey(new Date()));
   const todayTotal = today.filter(r => r.country === country).reduce((s, r) => s + r.total, 0);
   document.getElementById('expense-today').textContent = formatPrice(todayTotal, country);
@@ -2497,7 +2600,7 @@ function renderCatPicker(containerId, selectedId, ctx) {
       ${color ? `<span class="cat-dot" style="background:${color}"></span>` : ''}${esc(label)}
     </button>`;
   box.innerHTML = chip(null, 'Sin categoría', null) +
-    db.categories.map(c => chip(c.id, c.name, c.color)).join('') +
+    liveCategories().map(c => chip(c.id, c.name, c.color)).join('') +
     `<button type="button" class="cat-chip cat-chip-new" onclick="openCategorySheet(null, '${ctx}')">+ Nueva</button>`;
 }
 
@@ -2520,7 +2623,7 @@ function openRecordSheet(id) {
   nameEl.placeholder = defaultRecordName(r);
   document.getElementById('rec-amount-field').style.display = isExpense ? '' : 'none';
   document.getElementById('rec-amount').value = isExpense ? r.total : '';
-  document.getElementById('rec-delete-btn').style.display = isExpense ? '' : 'none';
+  document.getElementById('rec-delete-btn').textContent = isExpense ? 'Eliminar gasto' : 'Eliminar compra';
   renderCatPicker('rec-cats', r.category_id, 'rec');
   document.getElementById('rec-overlay').classList.add('open');
 }
@@ -2544,6 +2647,7 @@ function saveRecordSheet() {
   }
   r.name = document.getElementById('rec-name').value.trim() || null;   // vacío = nombre por defecto
   r.category_id = catPick.rec || null;
+  r.updated_at = nowIso();
   saveDB();
   closeRecordSheet();
   refreshViews();
@@ -2551,14 +2655,9 @@ function saveRecordSheet() {
 }
 
 function deleteRecordFromSheet() {
-  const r = findRecord(recSheetId);
-  if (!r) return;
-  if (!confirm('¿Eliminar este gasto?')) return;
-  db.sessions = db.sessions.filter(x => x.id !== r.id);
-  saveDB();
+  const id = recSheetId;
   closeRecordSheet();
-  refreshViews();
-  toast('Gasto eliminado');
+  deleteRecordWithUndo(id);
 }
 
 // ── HOJA: CATEGORÍA (crear / editar / eliminar) ──
@@ -2568,7 +2667,7 @@ function openCategorySheet(id, returnCtx) {
   catSheetId = id || null;
   catSheetReturn = returnCtx || null;
   const c = id ? categoryById(id) : null;
-  catSheetColor = c ? c.color : CATEGORY_COLORS[db.categories.length % CATEGORY_COLORS.length];
+  catSheetColor = c ? c.color : CATEGORY_COLORS[liveCategories().length % CATEGORY_COLORS.length];
   document.getElementById('cat-title').textContent = c ? 'Editar categoría' : 'Nueva categoría';
   document.getElementById('cat-name').value = c ? c.name : '';
   document.getElementById('cat-delete-btn').style.display = c ? '' : 'none';
@@ -2592,15 +2691,19 @@ function closeCategorySheet() {
 function saveCategorySheet() {
   const name = document.getElementById('cat-name').value.trim().slice(0, 24);
   if (!name) { toast('Escribí un nombre'); return; }
-  if (db.categories.some(c => c.id !== catSheetId && c.name.toLowerCase() === name.toLowerCase())) {
+  if (liveCategories().some(c => c.id !== catSheetId && c.name.toLowerCase() === name.toLowerCase())) {
     toast('Ya existe una categoría con ese nombre'); return;
   }
   let cat;
   if (catSheetId) {
     cat = categoryById(catSheetId);
-    cat.name = name; cat.color = catSheetColor;
+    cat.name = name; cat.color = catSheetColor; cat.updated_at = nowIso();
   } else {
-    cat = { id: uuid(), name, color: catSheetColor, created_at: new Date().toISOString() };
+    const now = nowIso();
+    cat = {
+      id: uuid(), household_id: db.context.household_id, name, color: catSheetColor,
+      created_by: db.context.user_id, created_at: now, updated_at: now, deleted_at: null
+    };
     db.categories.push(cat);
   }
   saveDB();
@@ -2614,13 +2717,15 @@ function saveCategorySheet() {
 function deleteCategoryFromSheet() {
   const c = categoryById(catSheetId);
   if (!c) return;
-  const n = db.sessions.filter(r => r.category_id === c.id).length;
+  const affected = liveRecords().filter(r => r.category_id === c.id);
+  const n = affected.length;
   const msg = n
     ? `${n} registro${n !== 1 ? 's' : ''} ${n !== 1 ? 'quedarán' : 'quedará'} sin categoría. ¿Eliminar "${c.name}"?`
     : `¿Eliminar "${c.name}"?`;
   if (!confirm(msg)) return;
-  db.sessions.forEach(r => { if (r.category_id === c.id) r.category_id = null; });
-  db.categories = db.categories.filter(x => x.id !== c.id);
+  const t = nowIso();
+  affected.forEach(r => { r.category_id = null; r.updated_at = t; });
+  c.deleted_at = t; c.updated_at = t;   // borrado lógico: la lápida permite sincronizar el borrado
   saveDB();
   closeCategorySheet();
   refreshViews();
@@ -2644,7 +2749,7 @@ function renderCategories() {
   document.getElementById('cat-next').disabled = catMonthOffset >= 0;
 
   // Solo registros de la moneda actual (no se mezclan monedas en un mismo total)
-  const inMonth = db.sessions.filter(r => {
+  const inMonth = liveRecords().filter(r => {
     const d = new Date(r.finished_at || r.created_at);
     return d.getFullYear() === base.getFullYear() && d.getMonth() === base.getMonth() && r.country === country;
   });
@@ -2658,7 +2763,7 @@ function renderCategories() {
   const monthTotal = inMonth.reduce((s, r) => s + r.total, 0);
   document.getElementById('cat-month-total').textContent = `${formatPrice(monthTotal, country)} · ${inMonth.length} registro${inMonth.length !== 1 ? 's' : ''}`;
 
-  const rows = db.categories.map(c => ({ id: c.id, name: c.name, color: c.color, ...(acc.get(c.id) || { count: 0, total: 0 }) }));
+  const rows = liveCategories().map(c => ({ id: c.id, name: c.name, color: c.color, ...(acc.get(c.id) || { count: 0, total: 0 }) }));
   rows.sort((a, b) => b.total - a.total);   // sort estable: los de $0 conservan el orden de creación
   if (acc.has(null)) rows.push({ id: null, name: 'Sin categoría', color: '#C9C9C4', ...acc.get(null) });
 
@@ -2689,7 +2794,16 @@ const catChipHtml = rec => {
   return c ? `<span class="cat-chip small"><span class="cat-dot" style="background:${c.color}"></span>${esc(c.name)}</span>` : '';
 };
 
-const shortDate = iso => new Date(iso).toLocaleString(getLocale().locale, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+// Fecha corta para listas. Si es de otro año se aclara el año (si no, dos años distintos se confunden).
+const shortDate = iso => {
+  const d = new Date(iso);
+  const opts = { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' };
+  if (d.getFullYear() !== new Date().getFullYear()) opts.year = 'numeric';
+  return d.toLocaleString(getLocale().locale, opts);
+};
+
+// En la lista, sin nombre propio una compra se titula con la fecha corta (entra sin cortarse)
+const historyTitle = r => (r.name && r.name.trim()) || (r.kind === 'expense' ? r.items[0].name : shortDate(r.finished_at || r.created_at));
 
 function recordSubtitle(r) {
   const text = [];
@@ -2700,7 +2814,7 @@ function recordSubtitle(r) {
 
 function renderHistory() {
   const body = document.getElementById('history-body');
-  const recs = newestFirst(db.sessions || [], r => (r.kind === 'expense' ? batchKey(r) : r.id), r => r.finished_at || r.created_at);
+  const recs = newestFirst(liveRecords(), r => (r.kind === 'expense' ? batchKey(r) : r.id), r => r.finished_at || r.created_at);
 
   if (recs.length === 0) {
     body.innerHTML = '<div class="history-empty"><p>Todavía no tenés<br>compras ni gastos.</p></div>';
@@ -2710,10 +2824,11 @@ function renderHistory() {
     <div class="history-item" onclick="openHistoryDetail('${r.id}')">
       <div class="history-item-icon">${svg(r.kind === 'expense' ? 'card' : 'bag', 18)}</div>
       <div class="history-item-info">
-        <div class="product-name">${esc(recordName(r))}</div>
+        <div class="product-name">${esc(historyTitle(r))}</div>
         <div class="history-item-count">${recordSubtitle(r)}</div>
       </div>
       <div class="history-item-total">${formatPrice(r.total, r.country)}</div>
+      <button class="product-delete" onclick="event.stopPropagation();deleteRecordWithUndo('${r.id}')" aria-label="Eliminar">${svg('trash', 16)}</button>
     </div>
   `).join('');
 }
@@ -2746,6 +2861,196 @@ function closeHistoryDetail() {
   hdRecordId = null;
 }
 
+
+// ── IDENTIDAD Y GRUPO FAMILIAR (tenancy) ──
+const nowIso = () => new Date().toISOString();
+const currentUser = () => db.users.find(u => u.id === db.context.user_id) || db.users[0];
+const currentHousehold = () => db.households.find(h => h.id === db.context.household_id) || db.households[0];
+
+// La UI solo ve lo que no está borrado; las lápidas quedan para poder sincronizar el borrado.
+// …y solo del grupo familiar activo (db.context.household_id): así, cuando haya varios grupos,
+// cambiar de grupo no mezcla datos.
+const liveRecords = () => db.records.filter(r => !r.deleted_at && r.household_id === db.context.household_id);
+const liveCategories = () => db.categories.filter(c => !c.deleted_at && c.household_id === db.context.household_id);
+
+// ── BORRADO LÓGICO DE REGISTROS ──
+function softDeleteRecords(ids) {
+  const t = nowIso();
+  let n = 0;
+  db.records.forEach(r => {
+    if (ids.includes(r.id) && !r.deleted_at) { r.deleted_at = t; r.updated_at = t; n++; }
+  });
+  saveDB();
+  return n;
+}
+
+function restoreRecords(ids) {
+  const t = nowIso();
+  db.records.forEach(r => {
+    if (ids.includes(r.id) && r.deleted_at) { r.deleted_at = null; r.updated_at = t; }
+  });
+  saveDB();
+}
+
+// Eliminar sin pedir confirmación: se puede deshacer desde el aviso (8 s)
+function deleteRecordWithUndo(id) {
+  const r = findRecord(id);
+  if (!r) return;
+  softDeleteRecords([id]);
+  if (hdRecordId === id) closeHistoryDetail();
+  refreshViews();
+  showSnack(`Eliminado: ${recordName(r)}`, [{
+    label: 'Deshacer',
+    onClick: () => { restoreRecords([id]); refreshViews(); toast('Restaurado ✓'); }
+  }]);
+}
+
+// ── MI CUENTA (tabla users) ──
+function accountView() {
+  const u = currentUser() || {};
+  return { firstname: u.first_name || '', lastname: u.last_name || '', email: u.email || '', avatar: u.avatar_data_url || '' };
+}
+
+function updateCurrentUser(patch, { save = true } = {}) {
+  const u = currentUser();
+  if (!u) return;
+  Object.assign(u, patch, { updated_at: nowIso() });
+  if (save) saveDB();
+}
+
+function readAccountForm() {
+  return {
+    first_name: document.getElementById('account-firstname').value.trim() || null,
+    last_name: document.getElementById('account-lastname').value.trim() || null,
+    email: document.getElementById('account-email').value.trim() || null,
+  };
+}
+
+function renderAccount() {
+  const { firstname, lastname, email, avatar } = accountView();
+
+  document.getElementById('account-firstname').value = firstname;
+  document.getElementById('account-lastname').value = lastname;
+  document.getElementById('account-email').value = email;
+
+  // Big avatar
+  const bigEl = document.getElementById('account-avatar-el');
+  if (avatar) {
+    bigEl.innerHTML = `<img src="${avatar}" alt="Avatar">`;
+  } else {
+    const initials = ((firstname[0] || '') + (lastname[0] || '')).toUpperCase() || '?';
+    bigEl.textContent = initials;
+    bigEl.style.fontSize = initials === '?' ? '28px' : '32px';
+  }
+
+  updateSidebarAccount();
+}
+
+function updateSidebarAccount() {
+  const u = accountView();
+  const fullname = [u.firstname, u.lastname].filter(Boolean).join(' ');
+  const initials = ((u.firstname?.[0] || '') + (u.lastname?.[0] || '')).toUpperCase() || '?';
+
+  document.getElementById('sidebar-name').textContent = fullname || 'Mi Cuenta';
+  document.getElementById('sidebar-email').textContent = u.email || 'Tocá para editar';
+
+  const sideEl = document.getElementById('sidebar-avatar-el');
+  if (u.avatar) {
+    sideEl.innerHTML = `<img src="${u.avatar}" alt="">`;
+  } else {
+    sideEl.textContent = initials;
+  }
+}
+
+function onAccountInput() {
+  // live update sidebar as user types (se guarda con "Guardar")
+  updateCurrentUser(readAccountForm(), { save: false });
+  updateSidebarAccount();
+}
+
+function saveAccount() {
+  updateCurrentUser(readAccountForm());
+  renderAccount();
+  toast('Datos guardados ✓');
+}
+
+function onAvatarChange(e) {
+  const file = e.target.files?.[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    updateCurrentUser({ avatar_data_url: ev.target.result });
+    renderAccount();
+  };
+  reader.readAsDataURL(file);
+}
+
+// ── EXPORTAR PARA MIGRAR A LA BASE MULTI-TENANT ──
+// Devuelve las filas listas para insertar, una lista por tabla de db/schema.*.sql
+// (mismos nombres de tabla y de columna). Los IDs se conservan: importar dos veces es idempotente
+// (upsert por id). Incluye lápidas (deleted_at) para que el borrado también migre.
+const EXPORT_VERSION = 1;
+const money = n => Number(Number(n || 0).toFixed(2));
+
+function buildExport() {
+  const ctx = db.context;
+  const prefs = { country: db.settings.country, decimal_sep: db.settings.decimal_sep };
+  return {
+    meta: { app: 'mychango', export_version: EXPORT_VERSION, source_db_version: db.version, exported_at: nowIso() },
+    tables: {
+      users: db.users.map(u => ({
+        id: u.id, auth_subject: u.auth_subject ?? null, email: u.email ?? null,
+        first_name: u.first_name ?? null, last_name: u.last_name ?? null,
+        preferences: u.id === ctx.user_id ? prefs : {},
+        created_at: u.created_at, updated_at: u.updated_at, deleted_at: u.deleted_at ?? null
+      })),
+      households: db.households.map(h => ({
+        id: h.id, name: h.name, created_by: h.created_by,
+        created_at: h.created_at, updated_at: h.updated_at, deleted_at: h.deleted_at ?? null
+      })),
+      household_members: db.household_members.map(m => ({
+        household_id: m.household_id, user_id: m.user_id, role: m.role, joined_at: m.joined_at
+      })),
+      categories: db.categories.map(c => ({
+        id: c.id, household_id: c.household_id, name: c.name, color: c.color, created_by: c.created_by,
+        created_at: c.created_at, updated_at: c.updated_at, deleted_at: c.deleted_at ?? null
+      })),
+      records: db.records.map(r => ({
+        id: r.id, household_id: r.household_id, created_by: r.created_by, kind: r.kind,
+        name: r.name ?? null, category_id: r.category_id ?? null,
+        country: r.country, currency: r.currency, total: money(r.total),
+        occurred_at: r.finished_at || r.created_at,
+        created_at: r.created_at, updated_at: r.updated_at, deleted_at: r.deleted_at ?? null
+      })),
+      record_items: db.records.flatMap(r => r.items.map((it, i) => ({
+        id: it.id, record_id: r.id, household_id: r.household_id, position: i,
+        name: it.name, unit_price: money(it.unit_price), quantity: it.quantity, subtotal: money(it.subtotal),
+        source: it.source || 'legacy', parser: it.parser ?? null, transcript: it.transcript ?? null,
+        batch_id: it.batch_id ?? null, created_at: it.added_at || r.created_at
+      })))
+    },
+    // Las fotos de perfil no van dentro de la tabla: se suben aparte (almacenamiento de archivos)
+    blobs: {
+      avatars: db.users.filter(u => u.avatar_data_url).map(u => ({ user_id: u.id, data_url: u.avatar_data_url }))
+    }
+  };
+}
+
+function downloadExport() {
+  const data = buildExport();
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `mychango-export-${nowIso().slice(0, 10)}.json`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1500);
+  const counts = Object.fromEntries(Object.entries(data.tables).map(([k, v]) => [k, v.length]));
+  log('info', 'Datos exportados', counts);
+  toast('Copia exportada ✓');
+}
 
 // ── LOG SYSTEM ──
 const LOG_MAX = 100;
@@ -2872,80 +3177,6 @@ function updateCurrencyPreview() {
   document.getElementById('currency-preview').textContent = `${loc.currency} · ej: ${example}`;
 }
 
-// ── ACCOUNT ──
-function renderAccount() {
-  const u = db.settings?.user || {};
-  const firstname = u.firstname || '';
-  const lastname = u.lastname || '';
-  const email = u.email || '';
-  const avatar = u.avatar || '';
-
-  document.getElementById('account-firstname').value = firstname;
-  document.getElementById('account-lastname').value = lastname;
-  document.getElementById('account-email').value = email;
-
-  // Big avatar
-  const bigEl = document.getElementById('account-avatar-el');
-  if (avatar) {
-    bigEl.innerHTML = `<img src="${avatar}" alt="Avatar">`;
-  } else {
-    const initials = ((firstname[0] || '') + (lastname[0] || '')).toUpperCase() || '?';
-    bigEl.textContent = initials;
-    bigEl.style.fontSize = initials === '?' ? '28px' : '32px';
-  }
-
-  updateSidebarAccount();
-}
-
-function updateSidebarAccount() {
-  const u = db.settings?.user || {};
-  const fullname = [u.firstname, u.lastname].filter(Boolean).join(' ');
-  const avatar = u.avatar || '';
-  const initials = ((u.firstname?.[0] || '') + (u.lastname?.[0] || '')).toUpperCase() || '?';
-
-  document.getElementById('sidebar-name').textContent = fullname || 'Mi Cuenta';
-  document.getElementById('sidebar-email').textContent = u.email || 'Tocá para editar';
-
-  const sideEl = document.getElementById('sidebar-avatar-el');
-  if (avatar) {
-    sideEl.innerHTML = `<img src="${avatar}" alt="">`;
-  } else {
-    sideEl.textContent = initials;
-  }
-}
-
-function onAccountInput() {
-  // live update sidebar as user types
-  if (!db.settings.user) db.settings.user = {};
-  db.settings.user.firstname = document.getElementById('account-firstname').value.trim();
-  db.settings.user.lastname  = document.getElementById('account-lastname').value.trim();
-  db.settings.user.email     = document.getElementById('account-email').value.trim();
-  updateSidebarAccount();
-}
-
-function saveAccount() {
-  if (!db.settings.user) db.settings.user = {};
-  db.settings.user.firstname = document.getElementById('account-firstname').value.trim();
-  db.settings.user.lastname  = document.getElementById('account-lastname').value.trim();
-  db.settings.user.email     = document.getElementById('account-email').value.trim();
-  saveDB();
-  renderAccount();
-  toast('Datos guardados ✓');
-}
-
-function onAvatarChange(e) {
-  const file = e.target.files?.[0];
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = ev => {
-    if (!db.settings.user) db.settings.user = {};
-    db.settings.user.avatar = ev.target.result;
-    saveDB();
-    renderAccount();
-  };
-  reader.readAsDataURL(file);
-}
-
 // ── UTILS ──
 function esc(s) {
   return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -2959,10 +3190,11 @@ function toast(msg) {
 }
 
 // ── INIT ──
+// Persistir de entrada: fija la identidad local (usuario/hogar) y deja hecha la migración de versión
+saveDB();
 renderSidebarNav();
 document.body.dataset.screen = currentScreen;
 if (!db.settings) db.settings = { country: 'AR', decimal_sep: 'comma' };
-if (!db.settings.user) db.settings.user = {};
 renderSettings();
 renderAccount();
 renderHome();
@@ -2976,9 +3208,9 @@ document.addEventListener('visibilitychange', () => {
 log('info', 'MyChango iniciado', {
   version: db.version,
   country: db.settings.country,
-  sessions_stored: db.sessions.length,
+  records_stored: liveRecords().length,
   categories: db.categories.length,
-  active_session_items: currentSession?.items?.length || 0,
+  draft_items: currentSession?.items?.length || 0,
   user_agent: navigator.userAgent
 });
 
