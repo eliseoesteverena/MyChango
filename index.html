@@ -549,6 +549,10 @@
     box-shadow: 0 4px 14px rgba(0,0,0,0.08);
   }
   .fab-secondary svg { width: 22px; height: 22px; color: var(--ink); }
+  .fab-doc { right: 184px; }
+  /* La compra es un carrito con varios productos; un comprobante da un solo monto, así que este
+     botón solo tiene sentido en Gastos e Ingresos (ver body[data-screen] más abajo). */
+  body[data-screen="shop"] #doc-btn { display: none; }
   .fab.recording { background: var(--red); animation: fabPulse 1.2s ease-out infinite; }
   @keyframes fabPulse {
     0%   { box-shadow: 0 0 0 0 rgba(231,76,60,0.45); }
@@ -1191,6 +1195,10 @@
     <button class="mic-help-close" onclick="hideMicHelp()" aria-label="Cerrar">✕</button>
   </div>
 
+  <input type="file" id="doc-input" accept="image/jpeg,image/png,image/webp,image/heic,image/heif,application/pdf" style="display:none" onchange="onDocumentPicked(event)">
+  <button class="fab fab-secondary fab-doc" id="doc-btn" onclick="pickDocument()" aria-label="Adjuntar comprobante">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="13" y2="17"/></svg>
+  </button>
   <button class="fab fab-secondary" id="manual-btn" onclick="openManualEntry()" aria-label="Cargar a mano">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
   </button>
@@ -2012,6 +2020,8 @@ function setRecordingUI(on) {
   mic.setAttribute('aria-label', on ? 'Enviar dictado' : 'Grabar producto');
   document.getElementById('rec-bar').classList.toggle('open', on);
   document.getElementById('manual-btn').style.display = on ? 'none' : '';
+  const docBtn = document.getElementById('doc-btn');
+  if (docBtn) docBtn.style.display = on ? 'none' : '';
 }
 
 function updateRecTime() {
@@ -2263,7 +2273,7 @@ function retryClip(id) {
   const p = pending.find(x => x.id === id);
   if (!p) return;
   p.t0 = performance.now();
-  runPipeline(p);
+  if (p.kind === 'document') runDocumentPipeline(p); else runPipeline(p);
 }
 
 function removePending(id) {
@@ -2424,9 +2434,10 @@ function addToCart() {
 
   const fields = {
     name, unit_price, quantity: isRecord ? 1 : currentQty,
-    source: fromPending ? 'voice' : 'manual',
+    source: fromPending ? (fromPending.kind === 'document' ? 'document' : 'voice') : 'manual',
     parser: fromPending ? 'manual' : undefined,
-    transcript: fromPending?.transcript
+    transcript: fromPending?.transcript,
+    doc_type: fromPending?.docType
   };
   if (isRecord) {
     const rec = createRecord(t, fields);
@@ -2447,8 +2458,14 @@ function addToCart() {
 const STAGE_LABEL = {
   transcribing: 'Transcribiendo…',
   parsing: 'Interpretando…',
-  structuring: 'Ordenando con IA…'
+  structuring: 'Ordenando con IA…',
+  reading: 'Leyendo comprobante…',
+  extracting: 'Extrayendo datos…'
 };
+// Texto por defecto de una fila mientras no hay nada mejor que mostrar (nombre dictado o del comprobante)
+const pendingTitle = (p, forError) => p.transcript || p.label
+  || (p.kind === 'document' ? (forError ? 'Comprobante sin procesar' : 'Leyendo comprobante…')
+                             : (forError ? 'Audio sin procesar' : 'Procesando audio…'));
 
 function itemRowHtml(item, country) {
   return `
@@ -2471,7 +2488,7 @@ function pendingRowHtml(p) {
     <div class="product-item error${fresh}" onclick="completePending('${p.id}')">
       <div class="product-qty">!</div>
       <div class="product-info">
-        <div class="product-name">${esc(p.transcript || 'Audio sin procesar')}</div>
+        <div class="product-name">${esc(pendingTitle(p, true))}</div>
         <div class="product-unit err-text">${esc(p.error || 'Error')} · Tocá para completar</div>
       </div>
       ${p.retryable ? `<button class="product-delete product-retry" onclick="event.stopPropagation();retryClip('${p.id}')" aria-label="Reintentar">${svg('retry', 16)}</button>` : ''}
@@ -2482,7 +2499,7 @@ function pendingRowHtml(p) {
     <div class="product-item pending${fresh}">
       <div class="product-qty"><span class="spin-sm"></span></div>
       <div class="product-info">
-        <div class="product-name">${esc(p.transcript || 'Procesando audio…')}</div>
+        <div class="product-name">${esc(pendingTitle(p, false))}</div>
         <div class="product-unit">${STAGE_LABEL[p.stage] || 'Procesando…'}</div>
       </div>
       <button class="product-delete" onclick="removePending('${p.id}')" aria-label="Cancelar">${svg('trash', 16)}</button>
@@ -2612,7 +2629,7 @@ function defaultRecordName(rec) {
 const recordName = rec => (rec.name && rec.name.trim()) || defaultRecordName(rec);
 
 // Un gasto o un ingreso = un registro con un solo ítem (un registro por ítem dictado)
-function createRecord(kind, { name, unit_price, quantity = 1, source, parser, transcript, batch_id }) {
+function createRecord(kind, { name, unit_price, quantity = 1, source, parser, transcript, batch_id, doc_type }) {
   const q = Math.max(1, parseInt(quantity, 10) || 1);
   const now = new Date().toISOString();
   const item = {
@@ -2627,6 +2644,7 @@ function createRecord(kind, { name, unit_price, quantity = 1, source, parser, tr
   if (parser) item.parser = parser;
   if (transcript) item.transcript = transcript;
   if (batch_id) item.batch_id = batch_id;
+  if (doc_type) item.doc_type = doc_type;   // metadata informativa (de qué comprobante salió), no se muestra en la UI
   const rec = {
     id: uuid(), household_id: db.context.household_id, created_by: db.context.user_id,
     kind, country: db.settings.country, currency: getLocale().currency,
@@ -3357,6 +3375,141 @@ function renderBalance() {
   accEl.textContent = signedPrice(all.balance, country).replace(/^\+/, '');
   accEl.classList.toggle('amount-in', all.balance > 0);
   accEl.classList.toggle('amount-neg', all.balance < 0);
+}
+
+// ── COMPROBANTES (foto o PDF) · solo en Gastos e Ingresos ──
+// Una compra con carrito tiene varios productos; un comprobante da un solo monto,
+// así que este botón no aparece en la pantalla de Compra (ver CSS: body[data-screen="shop"]).
+const DOC_ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif', 'application/pdf'];
+const DOC_MAX_BYTES = 15 * 1024 * 1024;   // antes de redimensionar; una foto de cámara ronda 3-8 MB
+const DOC_MAX_EDGE = 1600;                 // lado más largo tras redimensionar, en píxeles
+
+function pickDocument() {
+  if (!currentSession && currentScreen === 'shop') return;   // no debería poder llamarse acá, por las dudas
+  document.getElementById('doc-input').value = '';           // permite volver a elegir el mismo archivo
+  document.getElementById('doc-input').click();
+}
+
+function onDocumentPicked(ev) {
+  const file = ev.target.files?.[0];
+  if (!file) return;
+  if (!DOC_ALLOWED_TYPES.includes(file.type)) {
+    toast('Ese tipo de archivo no se puede leer. Probá con una foto o un PDF.');
+    log('warn', 'Comprobante rechazado: tipo no soportado', { type: file.type, name: file.name });
+    return;
+  }
+  if (file.size > DOC_MAX_BYTES) {
+    toast('El archivo pesa demasiado (máx. 15 MB)');
+    log('warn', 'Comprobante rechazado: demasiado pesado', { size_kb: Math.round(file.size / 1024) });
+    return;
+  }
+  enqueueDocument(file);
+}
+
+// Si es una imagen, la redimensiona (más rápido y barato de enviar); un PDF se manda tal cual.
+async function prepareDocument(file) {
+  if (file.type === 'application/pdf') {
+    return { base64: await blobToBase64(file), mime: 'application/pdf', size: file.size, originalSize: file.size, resized: false };
+  }
+  try {
+    const bitmap = await createImageBitmap(file);
+    const scale = Math.min(1, DOC_MAX_EDGE / Math.max(bitmap.width, bitmap.height));
+    const w = Math.max(1, Math.round(bitmap.width * scale)), h = Math.max(1, Math.round(bitmap.height * scale));
+    const canvas = document.createElement('canvas');
+    canvas.width = w; canvas.height = h;
+    canvas.getContext('2d').drawImage(bitmap, 0, 0, w, h);
+    bitmap.close?.();
+    const blob = await new Promise(res => canvas.toBlob(res, 'image/jpeg', 0.85));
+    if (!blob) throw new Error('canvas.toBlob devolvió null');
+    return { base64: await blobToBase64(blob), mime: 'image/jpeg', size: blob.size, originalSize: file.size, resized: true };
+  } catch (e) {
+    // HEIC en navegadores sin decodificador, por ejemplo: se manda el archivo original tal cual
+    log('warn', 'No se pudo redimensionar la imagen; se envía el archivo original', { name: e.name, message: e.message, type: file.type });
+    return { base64: await blobToBase64(file), mime: file.type, size: file.size, originalSize: file.size, resized: false };
+  }
+}
+
+function enqueueDocument(file) {
+  const target = targetOf();
+  if (target === 'shopping') return;   // este flujo es solo para Gastos e Ingresos
+  const p = {
+    id: uuid(), target, kind: 'document', sessionId: null,
+    status: 'pending', stage: 'reading',
+    file, file64: null, mime: null,
+    label: file.name, transcript: null, error: null, retryable: false,
+    t0: performance.now(),
+  };
+  pending.unshift(p);
+  freshIds.add(p.id);
+  log('info', 'Comprobante recibido', { target, name: file.name, type: file.type, size_kb: Math.round(file.size / 1024) });
+  renderTarget(p);
+  runDocumentPipeline(p);
+}
+
+async function runDocumentPipeline(p) {
+  const loc = getLocale();
+  const apiLoc = { country: loc.country, currency: loc.currency, symbol: loc.symbol };
+  const timings = {};
+  p.status = 'pending'; p.stage = p.file64 ? 'extracting' : 'reading'; p.error = null;
+  renderTarget(p);
+
+  try {
+    if (!p.file64) {
+      const tPrep = performance.now();
+      const prep = await prepareDocument(p.file);
+      timings.prep_ms = Math.round(performance.now() - tPrep);
+      if (!stillActive(p)) return;
+      p.file64 = prep.base64; p.mime = prep.mime; p.file = null;
+      log('info', 'Comprobante preparado', {
+        mime: prep.mime, size_kb: Math.round(prep.size / 1024),
+        original_kb: Math.round(prep.originalSize / 1024), resized: prep.resized, ms: timings.prep_ms,
+      });
+    }
+
+    p.stage = 'extracting'; renderTarget(p);
+    const t = performance.now();
+    const ex = await apiPost('/api/extract-document', { file: p.file64, mime_type: p.mime, kind: p.target, loc: apiLoc });
+    timings.extract_ms = Math.round(performance.now() - t);
+    if (!stillActive(p)) return;
+    p.serverDebug = ex._debug;
+    p.docType = ex.doc_type;
+    if (ex.name) p.transcript = ex.name;   // texto de la fila y, si falta el monto, nombre precargado al completar a mano
+    if (!(ex.unit_price > 0)) {
+      throw pipelineError('no_price', 'No se detectó un monto. Revisá el comprobante o completalo a mano.', false);
+    }
+    commitDocument(p, ex, timings);
+
+  } catch (e) {
+    if (!pending.includes(p)) return;
+    p.status = 'error'; p.error = e.message; p.retryable = !!e.retryable;
+    log(e.retryable ? 'warn' : 'error', `Comprobante no procesado (${e.step || 'error'}): ${e.message}`, {
+      step: e.step, doc_type: p.docType, timings, server: e.data || p.serverDebug,
+    });
+    renderTarget(p);
+  }
+}
+
+function commitDocument(p, ex, timings) {
+  pending = pending.filter(x => x !== p);
+  const rec = createRecord(p.target, {
+    name: ex.name, unit_price: ex.unit_price, quantity: 1,
+    source: 'document', parser: 'llm', transcript: ex.name || null, batch_id: p.id, doc_type: ex.doc_type,
+  });
+  renderTarget(p);
+
+  timings.total_ms = Math.round(performance.now() - p.t0);
+  const country = db.settings.country;
+  log('ok', `Comprobante (${ex.doc_type || '?'}) · ${rec.items[0].name} · ${formatPrice(rec.total, country)}`, {
+    doc_type: ex.doc_type, amount_basis: ex.amount_basis, currency_hint: ex.currency_hint, note: ex.note, timings,
+  });
+
+  let text = `${rec.items[0].name} · ${formatPrice(rec.total, country)}`;
+  if (ex.currency_hint) text += ` · comprobante en ${ex.currency_hint}`;
+  else if (ex.note) text += ` · ${ex.note}`;
+  const actions = [];
+  if (p.target === 'expense') actions.push({ label: 'Categorizar', onClick: () => openRecordSheet(rec.id) });
+  actions.push({ label: 'Deshacer', onClick: () => undoBatch(p.id, p.target) });
+  showSnack(text, actions);
 }
 
 // ── LOG SYSTEM ──
